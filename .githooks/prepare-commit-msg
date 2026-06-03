@@ -106,6 +106,8 @@ refactor(commit): simplify message generation flow
 "
 }
 
+regen_ai=1
+
 # ----------------------------
 # 🎛 UI loop (safe)
 # ----------------------------
@@ -114,7 +116,10 @@ while true; do
     # ----------------------------
     # 🤖 Generate AI message
     # ----------------------------
-    AI_MSG=$(generate_ai)
+    if [ "$regen_ai" = "1" ]; then
+        AI_MSG=$(generate_ai)
+        regen_ai=0
+    fi
 
     if [ -z "$AI_MSG" ]; then
         echo "⚠️ AI generation failed. Retrying..." > /dev/tty
@@ -162,11 +167,12 @@ while true; do
             ;;
 
         s)
-            git diff --cached | less < /dev/tty > /dev/tty 2>&1
+            git diff --cached
             ;;
 
         r)
             echo "🔄 regenerating AI commit..." > /dev/tty
+            regen_ai=1
             continue   # 🔥 correct way to restart loop
             ;;
 
