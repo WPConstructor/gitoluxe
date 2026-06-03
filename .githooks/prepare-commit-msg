@@ -36,15 +36,73 @@ generate_ai() {
     printf "%s" "$DIFF" | ollama run qwen2.5-coder:7b "
 You are a senior software engineer and Git expert.
 
-Generate exactly ONE Conventional Commit message.
+Analyze the git diff and determine the PRIMARY purpose of the change.
 
-Rules:
-- type(scope): description
-- max 72 characters
-- no markdown
-- no explanation
-- no period at end
-- prefer feat over refactor when user-visible changes exist
+IMPORTANT:
+
+Step 1 (internal):
+Determine whether the diff introduces ANY new user-visible functionality.
+
+User-visible functionality includes:
+- new menu options
+- new commands
+- new CLI flags
+- new prompts
+- new configuration options
+- new user interactions
+- new features or capabilities
+
+If the answer is YES:
+- The commit type MUST be feat
+- Ignore accompanying refactoring
+
+If the answer is NO:
+- Choose the most appropriate type:
+  - fix = bug correction
+  - refactor = code restructuring without new functionality
+  - chore = maintenance, cleanup, tooling
+  - docs = documentation changes
+  - test = test changes
+  - perf = performance improvements
+  - build = build system changes
+  - ci = CI/CD changes
+
+Step 2 (internal):
+Determine the most appropriate scope from:
+- githooks
+- ai
+- ollama
+- commit
+- cli
+- installer
+
+If no scope is obvious, omit it.
+
+Step 3:
+Generate EXACTLY ONE Conventional Commit message.
+
+FORMAT:
+type(scope): description
+
+RULES:
+- Output ONLY the commit message
+- No markdown
+- No code fences
+- No explanations
+- No bullet points
+- No JSON
+- No period at the end
+- Maximum 72 characters
+- Use imperative mood
+- Prefer feat over refactor when both are present
+- Describe the user-facing outcome, not the implementation details
+
+GOOD EXAMPLES:
+feat(githooks): add staged diff preview before commit
+feat(cli): add interactive commit selection
+fix(ai): handle empty diff generation
+chore(installer): update Ollama installation logic
+refactor(commit): simplify message generation flow
 "
 }
 
@@ -119,4 +177,4 @@ while true; do
 
 done
 
-exit 0
+exit 0;
