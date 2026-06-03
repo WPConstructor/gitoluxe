@@ -38,10 +38,6 @@ fi
 # ----------------------------
 start_ns=$(date +%s%N)
 
-#DIFF=$(git diff --cached | head -c 8000)
-
-#DIFF_B64=$(git diff --cached | base64 | tr -d '\n')
-
 DIFF_B64=$(git diff --cached | base64 | tr -d '\n')
 
 AI_MSG=$(ollama run qwen2.5-coder:7b "
@@ -95,13 +91,6 @@ if [ -z "$AI_MSG" ]; then
     exit 0
 fi
 
-echo > /dev/tty
-echo "==============================" > /dev/tty
-echo "🧠 AI Suggested Commit:" > /dev/tty
-echo "==============================" > /dev/tty
-echo "$AI_MSG" > /dev/tty
-echo "==============================" > /dev/tty
-
 # ----------------------------
 # 📊 TPS OUTPUT
 # ----------------------------
@@ -115,7 +104,7 @@ prompt_choice() {
     local answer
 
     while true; do
-        printf "[A]ccept, [E]dit, [M]anual ? " > /dev/tty
+        printf "[A]ccept, [E]dit, [M]anual, [S]how Changes ? " > /dev/tty
 
         if ! IFS= read -r answer < /dev/tty; then
             echo "a"
@@ -125,34 +114,49 @@ prompt_choice() {
         answer=$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')
 
         case "$answer" in
-            a|e|m|"")
+            a|e|m|s|"")
                 echo "${answer:-a}"
                 return
                 ;;
         esac
 
-        echo "Please choose A, E or M." > /dev/tty
+        echo "Please choose A, E, M or S." > /dev/tty
     done
 }
 
-choice=$(prompt_choice)
+while true; do
+    echo > /dev/tty
+    echo "==============================" > /dev/tty
+    echo "🧠 AI Suggested Commit:" > /dev/tty
+    echo "==============================" > /dev/tty
+    echo "$AI_MSG" > /dev/tty
+    echo "==============================" > /dev/tty
 
-case "$choice" in
+    choice=$(prompt_choice)
 
-    a)
-        printf "%s\n" "$AI_MSG" > "$COMMIT_MSG_FILE"
-        echo "✅ AI commit accepted" > /dev/tty
-        ;;
+    case "$choice" in
 
-    e)
-        printf "%s\n" "$AI_MSG" > "$COMMIT_MSG_FILE"
-        "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
-        ;;
+        a)
+            printf "%s\n" "$AI_MSG" > "$COMMIT_MSG_FILE"
+            echo "✅ AI commit accepted" > /dev/tty
+            break
+            ;;
 
-    m)
-        "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
-        ;;
+        e)
+            printf "%s\n" "$AI_MSG" > "$COMMIT_MSG_FILE"
+            "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
+            break
+            ;;
 
-esac
+        m)
+            "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
+            break
+            ;;
+
+        s)
+            git diff --cached
+            ;;
+    esac
+done
 
 exit 0
