@@ -15,6 +15,15 @@ LATEST_TAG=$(curl -s https://api.github.com/repos/WPConstructor/ai-git/tags \
 REPO_URL="https://raw.githubusercontent.com/WPConstructor/ai-git/$LATEST_TAG/.githooks/prepare-commit-msg"
 
 # -------------------------
+# 0. Check Git repository
+# -------------------------
+if [ ! -d ".git" ]; then
+  echo "❌ Git is not initialized in this directory."
+  echo "Please run git init and rerun the installer."
+  exit 1
+fi
+
+# -------------------------
 # 1. Install Ollama
 # -------------------------
 if ! ollama --version >/dev/null 2>&1; then
@@ -46,7 +55,10 @@ mkdir -p "$HOOK_DIR"
 if [ -f "$HOOK_FILE" ]; then
     echo "⚠️ Hook already exists: $HOOK_FILE"
 
-    read -r -p "Overwrite with latest version from GitHub? (y/N): " answer < /dev/tty
+    printf "Overwrite with latest version from GitHub? (y/N): " > /dev/tty
+    read answer < /dev/tty
+
+    exit 1
 
     case "$answer" in
         y|Y)
@@ -61,6 +73,8 @@ else
     echo "⬇️ Installing hook (not found locally)..."
     curl -fsSL "$REPO_URL" -o "$HOOK_FILE"
 fi
+
+[add git initialized here]
 
 # -------------------------
 # 5. Make hook executable
