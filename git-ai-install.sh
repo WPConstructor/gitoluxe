@@ -36,10 +36,26 @@ echo "📁 Creating .githooks directory..."
 mkdir -p "$HOOK_DIR"
 
 # -------------------------
-# 4. Download Git hook
+# 4. Hook install logic
 # -------------------------
-echo "⬇️ Downloading Git hook..."
-#curl -fsSL "$REPO_URL" -o "$HOOK_FILE"
+if [ -f "$HOOK_FILE" ]; then
+    echo "⚠️ Hook already exists: $HOOK_FILE"
+
+    read -r -p "Overwrite with latest version from GitHub? (y/N): " answer < /dev/tty
+
+    case "$answer" in
+        y|Y)
+            echo "⬇️ Overwriting hook..."
+            curl -fsSL "$REPO_URL" -o "$HOOK_FILE"
+            ;;
+        *)
+            echo "⏭️ Keeping existing hook"
+            ;;
+    esac
+else
+    echo "⬇️ Installing hook (not found locally)..."
+    curl -fsSL "$REPO_URL" -o "$HOOK_FILE"
+fi
 
 # -------------------------
 # 5. Make hook executable
@@ -66,6 +82,6 @@ echo "   ✔ Git AI Hook"
 echo ""
 echo "👉 Usage:"
 echo "   git add -A"
-echo "   git commit"
+echo "   git commit -m \"\""
 echo ""
 echo "🤖 AI will now assist your commits!"
