@@ -5,19 +5,16 @@ set -e
 COMMIT_MSG_FILE="$1"
 SOURCE="$2"
 
-# Skip merge/squash commits
 case "$SOURCE" in
     merge|squash)
         exit 0
         ;;
 esac
 
-# Skip if commit message already exists (e.g. -m, --amend, rebase)
 if [ -s "$COMMIT_MSG_FILE" ]; then
     exit 0
 fi
 
-# Require interactive terminal
 if [ ! -e /dev/tty ]; then
     exit 0
 fi
@@ -31,18 +28,58 @@ echo "🤖 Git AI Assistant" > /dev/tty
 echo "--------------------" > /dev/tty
 echo "Generating suggestion..." > /dev/tty
 
-if ! command -v ollama >/dev/null 2>&1; then
+if ! ollama --version >/dev/null 2>&1; then
     echo "⚠️ Ollama not found." > /dev/tty
     exit 0
 fi
 
-AI_MSG=$(printf "%s" "$DIFF" | ollama run qwen2.5-coder:7b '
-Generate a concise conventional commit message.
-Output only the commit message.
-No markdown.
-No explanation.
-One line.
-')
+# ----------------------------
+# ⏱ START TIMER
+# ----------------------------
+start_ns=$(date +%s%N)
+
+#DIFF=$(git diff --cached | head -c 8000)
+
+#DIFF_B64=$(git diff --cached | base64 | tr -d '\n')
+
+DIFF_B64=$(git diff --cached | base64 | tr -d '\n')
+
+AI_MSG=$(ollama run qwen2.5-coder:7b "
+You are a senior software engineer.
+
+The following is a BASE64 encoded git diff.
+
+Decode it mentally and generate a single-line conventional commit message.
+
+BASE64 DIFF:
+$DIFF_B64
+
+Rules:
+- one line only
+- no JSON
+- no markdown
+- no explanation
+")
+
+# ----------------------------
+# ⏱ END TIMER
+# ----------------------------
+end_ns=$(date +%s%N)
+
+# time in seconds
+duration_ms=$(( (end_ns - start_ns) / 1000000 ))
+
+# ----------------------------
+# 🧠 TOKEN ESTIMATE
+# ----------------------------
+chars=$(printf "%s" "$DIFF_B64" | wc -c)
+tokens=$((chars / 4))   # rough estimate: 1 token ≈ 4 chars
+
+if [ "$duration_ms" -gt 0 ]; then
+    tps=$(awk "BEGIN {printf \"%.2f\", $tokens / ($duration_ms / 1000)}")
+else
+    tps="∞"
+fi
 
 if [ -z "$AI_MSG" ]; then
     echo "⚠️ Failed to generate commit message." > /dev/tty
@@ -55,6 +92,14 @@ echo "🧠 AI Suggested Commit:" > /dev/tty
 echo "==============================" > /dev/tty
 echo "$AI_MSG" > /dev/tty
 echo "==============================" > /dev/tty
+
+# ----------------------------
+# 📊 TPS OUTPUT
+# ----------------------------
+echo "⚡ Tokens/sec: $tps" > /dev/tty
+echo "⏱ Time: ${duration_ms}ms" > /dev/tty
+echo "🧮 Tokens (est): $tokens" > /dev/tty
+
 echo > /dev/tty
 
 prompt_choice() {
