@@ -14,22 +14,15 @@ esac
 
 # Skip if commit message already exists (e.g. -m, --amend, rebase)
 if [ -s "$COMMIT_MSG_FILE" ]; then
-    echo "Commit message already exists.";
-    exit 1;
     exit 0
 fi
 
 # Require interactive terminal
 if [ ! -e /dev/tty ]; then
-    echo "Interactive terminal required.";
-    exit 1;
     exit 0
 fi
 
 DIFF=$(git diff --cached)
-
-echo "$DIFF"
-exit 1;
 
 [ -z "$DIFF" ] && exit 0
 
