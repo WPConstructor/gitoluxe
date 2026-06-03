@@ -165,13 +165,13 @@ while true; do
         AI_MSG_3=$(generate_ai)
         AI_MSG_1=$(echo "$AI_MSG_1" | tr '\n' ' ' | sed 's/`//g')
         AI_MSG_1=${AI_MSG_1:0:100}
-        AI_MSG_1=$(echo "$AI_MSG" | tr -s ' ')
+        AI_MSG_1=$(printf "%s" "$AI_MSG_1" | tr -s '[:space:]' ' ')
         AI_MSG_2=$(echo "$AI_MSG_2" | tr '\n' ' ' | sed 's/`//g')
         AI_MSG_2=${AI_MSG_2:0:100}
-        AI_MSG_2=$(echo "$AI_MSG" | tr -s ' ')
+        AI_MSG_2=$(printf "%s" "$AI_MSG_2" | tr -s '[:space:]' ' ')
         AI_MSG_3=$(echo "$AI_MSG_3" | tr '\n' ' ' | sed 's/`//g')
         AI_MSG_3=${AI_MSG_3:0:100}
-        AI_MSG_3=$(echo "$AI_MSG" | tr -s ' ')
+        AI_MSG_3=$(printf "%s" "$AI_MSG_3" | tr -s '[:space:]' ' ')
         regen_ai=0
     fi
 
