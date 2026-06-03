@@ -1,67 +1,104 @@
 #!/bin/bash
 
-COMMIT_MSG_FILE=$1
-SOURCE=$2
+set -e
 
-# Skip merge commits
-if [ "$SOURCE" = "merge" ]; then
-  exit 0
+COMMIT_MSG_FILE="$1"
+SOURCE="$2"
+
+# Skip merge/squash commits
+case "$SOURCE" in
+    merge|squash)
+        exit 0
+        ;;
+esac
+
+# Skip if commit message already exists (e.g. -m, --amend, rebase)
+if [ -s "$COMMIT_MSG_FILE" ]; then
+    exit 0
+fi
+
+# Require interactive terminal
+if [ ! -e /dev/tty ]; then
+    exit 0
 fi
 
 DIFF=$(git diff --cached)
 
-if [ -z "$DIFF" ]; then
-  exit 0
+[ -z "$DIFF" ] && exit 0
+
+echo > /dev/tty
+echo "🤖 Git AI Assistant" > /dev/tty
+echo "--------------------" > /dev/tty
+echo "Generating suggestion..." > /dev/tty
+
+if ! command -v ollama >/dev/null 2>&1; then
+    echo "⚠️ Ollama not found." > /dev/tty
+    exit 0
 fi
 
-echo ""
-echo "🤖 Git AI Assistant"
-echo "--------------------"
-echo "Generating suggestion..."
-
-AI_MSG=$(echo "$DIFF" | ollama run qwen3.5:7b "
-You are a senior software engineer.
-Generate a concise conventional commit message ONLY.
+AI_MSG=$(printf "%s" "$DIFF" | ollama run qwen2.5-coder:7b '
+Generate a concise conventional commit message.
+Output only the commit message.
+No markdown.
 No explanation.
-")
+One line.
+')
 
-echo ""
-echo "=============================="
-echo "🧠 AI Suggested Commit:"
-echo "=============================="
-echo "$AI_MSG"
-echo "=============================="
-echo ""
+if [ -z "$AI_MSG" ]; then
+    echo "⚠️ Failed to generate commit message." > /dev/tty
+    exit 0
+fi
 
-echo "Options:"
-echo "1) Accept AI message"
-echo "2) Edit AI message"
-echo "3) Write your own message"
-echo ""
+echo > /dev/tty
+echo "==============================" > /dev/tty
+echo "🧠 AI Suggested Commit:" > /dev/tty
+echo "==============================" > /dev/tty
+echo "$AI_MSG" > /dev/tty
+echo "==============================" > /dev/tty
+echo > /dev/tty
 
-read -p "Select (1/2/3): " choice
+prompt_choice() {
+    local answer
+
+    while true; do
+        printf "[A]ccept, [E]dit, [M]anual ? " > /dev/tty
+
+        if ! IFS= read -r answer < /dev/tty; then
+            echo "a"
+            return
+        fi
+
+        answer=$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')
+
+        case "$answer" in
+            a|e|m|"")
+                echo "${answer:-a}"
+                return
+                ;;
+        esac
+
+        echo "Please choose A, E or M." > /dev/tty
+    done
+}
+
+choice=$(prompt_choice)
 
 case "$choice" in
 
-  1)
-    echo "$AI_MSG" > "$COMMIT_MSG_FILE"
-    echo "✅ AI commit accepted"
-    ;;
+    a)
+        printf "%s\n" "$AI_MSG" > "$COMMIT_MSG_FILE"
+        echo "✅ AI commit accepted" > /dev/tty
+        ;;
 
-  2)
-    echo "✍️ Editing AI message..."
-    echo "$AI_MSG" > "$COMMIT_MSG_FILE"
-    ${EDITOR:-nano} "$COMMIT_MSG_FILE"
-    ;;
+    e)
+        printf "%s\n" "$AI_MSG" > "$COMMIT_MSG_FILE"
+        "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
+        ;;
 
-  3)
-    echo "✍️ Write your own message..."
-    echo "" > "$COMMIT_MSG_FILE"
-    ${EDITOR:-nano} "$COMMIT_MSG_FILE"
-    ;;
+    m)
+        "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
+        ;;
 
-  *)
-    echo "Invalid choice - aborting commit"
-    exit 1
-    ;;
 esac
+
+exit 0
