@@ -7,7 +7,12 @@ echo "🚀 Installing AI Git System (Ollama + Qwen3.5 + Hooks)..."
 HOOK_DIR=".githooks"
 HOOK_FILE="$HOOK_DIR/prepare-commit-msg"
 
-REPO_URL="https://raw.githubusercontent.com/WPConstructor/ai-git/main/.githooks/prepare-commit-msg"
+LATEST_TAG=$(curl -s https://api.github.com/repos/WPConstructor/ai-git/tags \
+  | grep '"name"' \
+  | head -n 1 \
+  | cut -d '"' -f4)
+
+REPO_URL="https://raw.githubusercontent.com/WPConstructor/ai-git/$LATEST_TAG/.githooks/prepare-commit-msg"
 
 # -------------------------
 # 1. Install Ollama
