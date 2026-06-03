@@ -20,10 +20,14 @@ else
 fi
 
 # -------------------------
-# 2. Pull Qwen3.5-Coder
+# 2. Pull Qwen2.5-coder:7b
 # -------------------------
-echo "🤖 Pulling Qwen3.5-Coder (7B)..."
-ollama pull qwen2.5-coder:7b
+if ! ollama list | grep -q '^qwen2.5-coder:7b'; then
+    echo "🤖 Pulling qwen2.5-coder:7b..."
+    ollama pull qwen2.5-coder:7b
+else
+    echo "✅ qwen2.5-coder:7b already installed"
+fi
 
 # -------------------------
 # 3. Create git hooks directory
