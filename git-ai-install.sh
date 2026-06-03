@@ -39,7 +39,7 @@ mkdir -p "$HOOK_DIR"
 # 4. Download Git hook
 # -------------------------
 echo "⬇️ Downloading Git hook..."
-curl -fsSL "$REPO_URL" -o "$HOOK_FILE"
+#curl -fsSL "$REPO_URL" -o "$HOOK_FILE"
 
 # -------------------------
 # 5. Make hook executable
