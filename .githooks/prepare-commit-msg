@@ -5,6 +5,9 @@ set -e
 COMMIT_MSG_FILE="$1"
 SOURCE="$2"
 
+echo "yes"
+exit 1
+
 # Skip merge/squash commits
 case "$SOURCE" in
     merge|squash)
