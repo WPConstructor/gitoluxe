@@ -34,10 +34,10 @@ DIFF=$(git diff --cached --unified=1)
 [ -z "$STAGED_FILES" ] && exit 0
 
 # ----------------------------
-# 🧠 Build AI input
+# 🧠 Build AI INPUT_PROMPT
 # ----------------------------
 
-INPUT=$(printf "
+INPUT_PROMPT=$(printf "
 STAGED FILES (IMPORTANT):
 %s
 
@@ -52,21 +52,25 @@ FULL DIFF:
 # 🧠 AI generator function
 # ----------------------------
 generate_ai() {
-printf "%s" "$INPUT" | ollama run qwen2.5-coder:7b "
+printf "%s" "$INPUT_PROMPT" | ollama run qwen2.5-coder:7b "
 You are a senior software engineer and Git expert.
 
-Analyze the git diff and determine the PRIMARY purpose of the change.
+You generate ONLY Git Conventional Commit messages.
 
-IMPORTANT RULE ABOUT FILE TYPES:
-- If the change affects .md (Markdown) files, treat them as documentation text only.
-- DO NOT treat Markdown files as source code.
-- Changes in .md files are always docs unless they clearly describe a new feature being introduced in code.
+You MUST follow ALL instructions exactly. No exceptions.
+
+---
+
+IMPORTANT RULES ABOUT FILE TYPES:
+- If the change affects .md (Markdown) files, treat them ONLY as documentation text.
+- NEVER treat Markdown files as source code.
+- Markdown changes are ALWAYS docs unless they clearly accompany a code feature change.
 
 ---
 
 STEP 1: DETERMINE PURPOSE
 
-Determine whether the diff introduces ANY new user-visible functionality.
+Determine whether the change introduces ANY user-visible functionality.
 
 User-visible functionality includes:
 - new menu options
@@ -82,10 +86,10 @@ If YES:
 - ignore refactoring noise
 
 If NO:
-Choose the most appropriate type:
+Choose exactly ONE of:
 - fix = bug correction
 - refactor = code restructuring without behavior change
-- chore = maintenance, cleanup, tooling
+- chore = maintenance or tooling
 - docs = documentation or markdown changes
 - test = test changes
 - perf = performance improvements
@@ -95,7 +99,8 @@ Choose the most appropriate type:
 ---
 
 STEP 2: SCOPE DETECTION
-Choose scope from:
+
+Choose ONE scope if clearly applicable:
 - githooks
 - ai
 - ollama
@@ -107,23 +112,27 @@ If unclear, omit scope.
 
 ---
 
-STEP 3: OUTPUT FORMAT
+STEP 3: OUTPUT FORMAT (STRICT HARD CONSTRAINT)
 
-Return EXACTLY ONE Conventional Commit message:
+You MUST output EXACTLY ONE LINE and NOTHING ELSE.
+
+ABSOLUTE RULES:
+- Output MUST be a single line only
+- Output MUST NOT contain newline characters
+- Output MUST NOT contain markdown (no tripple backticks or backticks)
+- Output MUST NOT contain explanations
+- Output MUST NOT contain multiple suggestions
+- Output MUST NOT contain prefixes or suffixes
+- Output MUST NOT contain bullet points
+- Output MUST NOT contain JSON
+- Output MUST NOT end with a period
+- Output MUST be plain text only
+- Output MUST be ≤ 75 characters total
+- Output MUST follow this format exactly:
 
 type(scope): description
 
-RULES:
-- output ONLY the commit message
-- no markdown
-- no explanations
-- no code blocks
-- no JSON
-- no period at end
-- max 72 characters
-- imperative mood
-- prefer feat over refactor when both apply
-- describe user impact, not implementation details
+---
 
 GOOD EXAMPLES:
 feat(githooks): add staged diff preview before commit
@@ -132,6 +141,11 @@ fix(ai): handle empty diff generation
 chore(installer): update Ollama installation logic
 refactor(commit): simplify message generation flow
 docs(readme): improve installation instructions
+
+---
+
+FINAL RULE:
+Return ONLY the commit message. Nothing else.
 "
 }
 
@@ -146,13 +160,19 @@ while true; do
     # 🤖 Generate AI message
     # ----------------------------
     if [ "$regen_ai" = "1" ]; then
-        AI_MSG=$(generate_ai)
+        AI_MSG_1=$(generate_ai)
+        AI_MSG_2=$(generate_ai)
+        AI_MSG_3=$(generate_ai)
+        AI_MSG_1=$(echo "$AI_MSG_1" | tr '\n' ' ' | sed 's/`//g')
+        AI_MSG_1=${AI_MSG_1:0:100}
+        AI_MSG_1=$(echo "$AI_MSG" | tr -s ' ')
+        AI_MSG_2=$(echo "$AI_MSG_2" | tr '\n' ' ' | sed 's/`//g')
+        AI_MSG_2=${AI_MSG_2:0:100}
+        AI_MSG_2=$(echo "$AI_MSG" | tr -s ' ')
+        AI_MSG_3=$(echo "$AI_MSG_3" | tr '\n' ' ' | sed 's/`//g')
+        AI_MSG_3=${AI_MSG_3:0:100}
+        AI_MSG_3=$(echo "$AI_MSG" | tr -s ' ')
         regen_ai=0
-    fi
-
-    if [ -z "$AI_MSG" ]; then
-        echo "⚠️ AI generation failed. Retrying..." > /dev/tty
-        continue
     fi
 
     # ----------------------------
@@ -162,30 +182,56 @@ while true; do
     echo "==============================" > /dev/tty
     echo "🧠 AI Suggested Commit:" > /dev/tty
     echo "==============================" > /dev/tty
-    echo "$AI_MSG" > /dev/tty
+    echo "[1] $AI_MSG_1" > /dev/tty
+    echo "[2] $AI_MSG_2" > /dev/tty
+    echo "[3] $AI_MSG_3" > /dev/tty
     echo "==============================" > /dev/tty
 
     # ----------------------------
     # 🎮 Menu
     # ----------------------------
-    printf "[A]ccept, [R]egenerate, [S]how Changes, [E]dit, [M]anual ? " > /dev/tty
+    printf "Accept [1-3], [R]egenerate, [S]how Changes, Edit [E1,E2,E3], [M]anual ? " > /dev/tty
 
     if ! IFS= read -r choice < /dev/tty; then
-        choice="a"
+        choice="1"
     fi
 
     choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
 
     case "$choice" in
 
-        a|"")
-            printf "%s\n" "$AI_MSG" > "$COMMIT_MSG_FILE"
+        1)
+            printf "%s\n" "$AI_MSG_1" > "$COMMIT_MSG_FILE"
             echo "✅ AI commit accepted" > /dev/tty
             exit 0
             ;;
 
-        e)
-            printf "%s\n" "$AI_MSG" > "$COMMIT_MSG_FILE"
+        2)
+            printf "%s\n" "$AI_MSG_2" > "$COMMIT_MSG_FILE"
+            echo "✅ AI commit accepted" > /dev/tty
+            exit 0
+            ;;
+
+        3)
+            printf "%s\n" "$AI_MSG_3" > "$COMMIT_MSG_FILE"
+            echo "✅ AI commit accepted" > /dev/tty
+            exit 0
+            ;;
+
+        e1)
+            printf "%s\n" "$AI_MSG_1" > "$COMMIT_MSG_FILE"
+            "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
+            exit 0
+            ;;
+
+        e2)
+            printf "%s\n" "$AI_MSG_2" > "$COMMIT_MSG_FILE"
+            "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
+            exit 0
+            ;;
+
+        e3)
+            printf "%s\n" "$AI_MSG_3" > "$COMMIT_MSG_FILE"
             "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
             exit 0
             ;;
