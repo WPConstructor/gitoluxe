@@ -12,7 +12,7 @@ REPO_URL="https://raw.githubusercontent.com/WPConstructor/ai-git/main/.githooks/
 # -------------------------
 # 1. Install Ollama
 # -------------------------
-if ! command -v ollama &> /dev/null; then
+if ! ollama --version >/dev/null 2>&1; then
   echo "📦 Installing Ollama..."
   curl -fsSL https://ollama.com/install.sh | sh
 else
@@ -23,7 +23,7 @@ fi
 # 2. Pull Qwen3.5-Coder
 # -------------------------
 echo "🤖 Pulling Qwen3.5-Coder (7B)..."
-ollama pull qwen3.5:7b
+ollama pull qwen2.5-coder:7b
 
 # -------------------------
 # 3. Create git hooks directory
