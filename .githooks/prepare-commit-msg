@@ -23,24 +23,49 @@ if [ ! -e /dev/tty ]; then
 fi
 
 # ----------------------------
-# 📦 Get staged diff ONCE
+# 📦 Collect staged data
 # ----------------------------
-DIFF=$(git diff --cached --unified=1 | head -c 6000)
 
-[ -z "$DIFF" ] && exit 0
+STAGED_FILES=$(git diff --cached --name-status)
+STAGED_STAT=$(git diff --cached --stat)
+DIFF=$(git diff --cached --unified=1)
+
+# If nothing staged
+[ -z "$STAGED_FILES" ] && exit 0
+
+# ----------------------------
+# 🧠 Build AI input
+# ----------------------------
+
+INPUT=$(printf "
+STAGED FILES (IMPORTANT):
+%s
+
+STAGED STAT:
+%s
+
+FULL DIFF:
+%s
+" "$STAGED_FILES" "$STAGED_STAT" "$DIFF")
 
 # ----------------------------
 # 🧠 AI generator function
 # ----------------------------
 generate_ai() {
-    printf "%s" "$DIFF" | ollama run qwen2.5-coder:7b "
+printf "%s" "$INPUT" | ollama run qwen2.5-coder:7b "
 You are a senior software engineer and Git expert.
 
 Analyze the git diff and determine the PRIMARY purpose of the change.
 
-IMPORTANT:
+IMPORTANT RULE ABOUT FILE TYPES:
+- If the change affects .md (Markdown) files, treat them as documentation text only.
+- DO NOT treat Markdown files as source code.
+- Changes in .md files are always docs unless they clearly describe a new feature being introduced in code.
 
-Step 1 (internal):
+---
+
+STEP 1: DETERMINE PURPOSE
+
 Determine whether the diff introduces ANY new user-visible functionality.
 
 User-visible functionality includes:
@@ -52,23 +77,25 @@ User-visible functionality includes:
 - new user interactions
 - new features or capabilities
 
-If the answer is YES:
-- The commit type MUST be feat
-- Ignore accompanying refactoring
+If YES:
+- commit type MUST be feat
+- ignore refactoring noise
 
-If the answer is NO:
-- Choose the most appropriate type:
-  - fix = bug correction
-  - refactor = code restructuring without new functionality
-  - chore = maintenance, cleanup, tooling
-  - docs = documentation changes
-  - test = test changes
-  - perf = performance improvements
-  - build = build system changes
-  - ci = CI/CD changes
+If NO:
+Choose the most appropriate type:
+- fix = bug correction
+- refactor = code restructuring without behavior change
+- chore = maintenance, cleanup, tooling
+- docs = documentation or markdown changes
+- test = test changes
+- perf = performance improvements
+- build = build system changes
+- ci = CI/CD changes
 
-Step 2 (internal):
-Determine the most appropriate scope from:
+---
+
+STEP 2: SCOPE DETECTION
+Choose scope from:
 - githooks
 - ai
 - ollama
@@ -76,26 +103,27 @@ Determine the most appropriate scope from:
 - cli
 - installer
 
-If no scope is obvious, omit it.
+If unclear, omit scope.
 
-Step 3:
-Generate EXACTLY ONE Conventional Commit message.
+---
 
-FORMAT:
+STEP 3: OUTPUT FORMAT
+
+Return EXACTLY ONE Conventional Commit message:
+
 type(scope): description
 
 RULES:
-- Output ONLY the commit message
-- No markdown
-- No code fences
-- No explanations
-- No bullet points
-- No JSON
-- No period at the end
-- Maximum 72 characters
-- Use imperative mood
-- Prefer feat over refactor when both are present
-- Describe the user-facing outcome, not the implementation details
+- output ONLY the commit message
+- no markdown
+- no explanations
+- no code blocks
+- no JSON
+- no period at end
+- max 72 characters
+- imperative mood
+- prefer feat over refactor when both apply
+- describe user impact, not implementation details
 
 GOOD EXAMPLES:
 feat(githooks): add staged diff preview before commit
@@ -103,6 +131,7 @@ feat(cli): add interactive commit selection
 fix(ai): handle empty diff generation
 chore(installer): update Ollama installation logic
 refactor(commit): simplify message generation flow
+docs(readme): improve installation instructions
 "
 }
 
