@@ -45,7 +45,7 @@ start_ns=$(date +%s%N)
 DIFF_B64=$(git diff --cached | base64 | tr -d '\n')
 
 AI_MSG=$(ollama run qwen2.5-coder:7b "
-You are a senior software engineer.
+You are a git commit message generator.
 
 The following is a BASE64 encoded git diff.
 
@@ -54,11 +54,20 @@ Decode it mentally and generate a single-line conventional commit message.
 BASE64 DIFF:
 $DIFF_B64
 
-Rules:
-- one line only
-- no JSON
-- no markdown
-- no explanation
+STRICT RULES:
+- Output MUST follow Conventional Commits format
+- Format: type(scope): short description
+- NO full sentences
+- NO period at the end
+- MAX 80 characters
+- Use imperative mood (e.g. add, fix, remove, update)
+- Only ONE line output
+- No explanation
+
+Examples:
+feat(auth): add login validation
+fix(api): handle null response crash
+chore(githooks): update commit hook logic
 ")
 
 # ----------------------------
