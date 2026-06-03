@@ -134,7 +134,7 @@ while true; do
     # ----------------------------
     # 🎮 Menu
     # ----------------------------
-    printf "[A]ccept, [E]dit, [M]anual, [S]how, [R]egenerate ? " > /dev/tty
+    printf "[A]ccept, [E]dit, [M]anual, [S]how Changes, [R]egenerate ? " > /dev/tty
 
     if ! IFS= read -r choice < /dev/tty; then
         choice="a"
