@@ -48,11 +48,7 @@ FULL DIFF:
 %s
 " "$STAGED_FILES" "$STAGED_STAT" "$DIFF")
 
-# ----------------------------
-# 🧠 AI generator function
-# ----------------------------
-generate_ai() {
-printf "%s" "$INPUT_PROMPT" | ollama run qwen2.5-coder:7b "
+PROMPT=$(printf "
 You are a senior software engineer and Git expert.
 
 You generate ONLY Git Conventional Commit messages.
@@ -61,35 +57,40 @@ You MUST follow ALL instructions exactly. No exceptions.
 
 ---
 
-IMPORTANT RULES ABOUT FILE TYPES:
+## IMPORTANT RULES ABOUT FILE TYPES
+
 - If the change affects .md (Markdown) files, treat them ONLY as documentation text.
 - NEVER treat Markdown files as source code.
+- Markdown files describe documentation, not runtime behavior or logic.
 - Markdown changes are ALWAYS docs unless they clearly accompany a code feature change.
+- If both code and markdown are changed, prioritize the code change for commit type.
 
 ---
 
-STEP 1: DETERMINE PURPOSE
+## STEP 1: ANALYZE THE CHANGE (internal reasoning only)
 
-Determine whether the change introduces ANY user-visible functionality.
+Before deciding anything, you MUST understand:
+- what files changed
+- what was added, removed, or modified
+- what behavior changed (if any)
+- whether the user experience changed
+- whether this introduces new functionality or only refactors/docs
 
 User-visible functionality includes:
-- new menu options
-- new commands
-- new CLI flags
-- new prompts
+- new commands or CLI options
+- new menu items or prompts
 - new configuration options
 - new user interactions
 - new features or capabilities
 
-If YES:
-- commit type MUST be feat
-- ignore refactoring noise
+If ANY user-visible functionality exists:
+→ commit type MUST be feat
+→ ignore refactoring noise
 
-If NO:
-Choose exactly ONE of:
+Otherwise choose ONE:
 - fix = bug correction
 - refactor = code restructuring without behavior change
-- chore = maintenance or tooling
+- chore = maintenance, cleanup, tooling
 - docs = documentation or markdown changes
 - test = test changes
 - perf = performance improvements
@@ -98,7 +99,7 @@ Choose exactly ONE of:
 
 ---
 
-STEP 2: SCOPE DETECTION
+## STEP 2: SCOPE DETECTION
 
 Choose ONE scope if clearly applicable:
 - githooks
@@ -112,29 +113,31 @@ If unclear, omit scope.
 
 ---
 
-STEP 3: OUTPUT FORMAT (STRICT HARD CONSTRAINT)
+## STEP 3: OUTPUT FORMAT (STRICT)
 
 You MUST output EXACTLY ONE LINE and NOTHING ELSE.
 
 ABSOLUTE RULES:
-- Output MUST be a single line only
-- Output MUST NOT contain newline characters
-- Output MUST NOT contain markdown (no tripple backticks or backticks)
-- Output MUST NOT contain explanations
-- Output MUST NOT contain multiple suggestions
-- Output MUST NOT contain prefixes or suffixes
-- Output MUST NOT contain bullet points
-- Output MUST NOT contain JSON
-- Output MUST NOT end with a period
-- Output MUST be plain text only
-- Output MUST be ≤ 75 characters total
-- Output MUST follow this format exactly:
+- single line only
+- no newline characters
+- no markdown (no backticks, no code blocks)
+- no explanations
+- no multiple suggestions
+- no JSON
+- no bullet points
+- no extra text
+- no trailing period
+- max 75 characters
+- imperative mood (add, fix, remove, update)
+- describe user impact, not implementation details
 
+FORMAT:
 type(scope): description
 
 ---
 
-GOOD EXAMPLES:
+## GOOD EXAMPLES
+
 feat(githooks): add staged diff preview before commit
 feat(cli): add interactive commit selection
 fix(ai): handle empty diff generation
@@ -145,16 +148,128 @@ docs(readme): improve installation instructions
 ---
 
 FINAL RULE:
-Return ONLY the commit message. Nothing else.
+Return ONLY the commit message. Nothing else.")
+
+EXPLANATION="
+You are a senior software engineer.
+
+Explain EXACTLY what changed in the git diff.
+
+IMPORTANT RULES ABOUT FILE TYPES:
+- If the change affects .md (Markdown) files, treat them ONLY as documentation text.
+- NEVER treat Markdown files as source code.
+- Markdown changes are ALWAYS docs unless they clearly accompany a code feature change.
+- Markdown files describe documentation, not runtime behavior or logic.
+- Code files define behavior and functionality.
+- Always separate documentation changes from functional changes.
+
+Rules:
+- Be precise
+- List what was added, removed, or modified
+- Mention affected files
+- Do NOT output a commit message
+- Do NOT summarize too broadly
 "
+
+BODY_PROMPT="You are a senior software engineer writing Git commit messages.
+
+You will receive a git diff or a summary of changes.
+
+Your task is to generate ONLY the COMMIT BODY (not the subject line).
+
+---
+
+RULES:
+
+- Output plain text only
+- No subject line
+- No commit type (no feat/fix/refactor)
+- No markdown
+- No code blocks
+- No JSON
+- No bullet points unless absolutely necessary
+- No emojis
+- No explanations
+- No extra text
+
+---
+
+FORMAT:
+
+Write a short, clear explanation of WHAT changed and WHY.
+
+Structure:
+- first line: high-level summary of the change
+- next lines: important details (what was added, removed, or modified)
+- keep it concise (max ~5 lines)
+- focus on behavior and impact, not code structure
+
+---
+
+IMPORTANT:
+
+- Explain user impact if applicable
+- Mention key functional changes
+- Ignore minor refactors unless important
+- Treat .md files as documentation only
+
+---
+
+EXAMPLE OUTPUT:
+
+Adds interactive commit menu to improve developer workflow
+
+Users can now preview AI-generated commit messages before accepting them.
+Adds options to regenerate, edit, or manually write commit messages.
+Improves usability of the git hook by making suggestions reviewable."
+
+body_msg=""
+
+generate_body() {
+    printf "%s" "$INPUT_PROMPT" | ollama run qwen2.5-coder:7b "$BODY_PROMPT"
+}
+
+# ----------------------------
+# 🧠 AI generator function
+# ----------------------------
+generate_ai() {
+    printf "%s" "$INPUT_PROMPT" | ollama run qwen2.5-coder:7b "$PROMPT"
+
+# You are a senior software engineer and Git expert.
+# 
+# Generate ONLY a Git Conventional Commit message.
+# 
+# Rules:
+# - output exactly one line
+# - format: type(scope): description
+# - max 75 characters
+# - no explanations
+# - no markdown
+# - no periods
+# - imperative mood
+# - prefer feat over refactor when user-facing behavior changes
+# - describe impact, not implementation details
+# "
+}
+
+build_commit_message() {
+    local subject="$1"
+    local body_msg="$2"
+
+    if [ -z "$body_msg" ]; then
+        printf "%s\n" "$subject"
+    else
+        printf "%s\n\n%s\n" "$subject" "$body_msg"
+    fi
 }
 
 cleanup_ai_msg() {
     printf "%s" "$1" \
-        | tr '\n' ' ' \
+        | sed 's/[[:space:]]\+/ /g' \
         | sed 's/`//g' \
-        | tr -s '[:space:]' ' ' \
-        | cut -c1-100
+        | tr -d '\n' \
+        | tr -d '\t' \
+        | cut -c1-150
 }
 
 generate_batch() {
@@ -184,26 +299,37 @@ check_choice() {
 }
 
 regen_ai=1
-total_ai_msg=3
+total_ai_msg=0
 
 # ----------------------------
 # 🎛 UI loop (safe)
 # ----------------------------
 while true; do
-
     # ----------------------------
-    # 🤖 Generate AI message
+    # 🤖 Add 5 AI Message Suggestions
     # ----------------------------
     if [ "$regen_ai" = "1" ]; then
-        if [ "$total_ai_msg" -eq 3 ]; then
-            generate_batch 1 3
-        elif [ "$total_ai_msg" -eq 6 ]; then
-            generate_batch 4 6
-        elif [ "$total_ai_msg" -eq 9 ]; then
-            generate_batch 7 9
-        elif [ "$total_ai_msg" -eq 12 ]; then
-            generate_batch 10 12
+        total_ai_msg=$((total_ai_msg + 5))
+        if [ "$total_ai_msg" -gt 20 ]; then
+            total_ai_msg=20
+        fi  
+        if [ "$total_ai_msg" -eq 5 ]; then
+            generate_batch 1 5
+        elif [ "$total_ai_msg" -eq 10 ]; then
+            generate_batch 6 10
+        elif [ "$total_ai_msg" -eq 15 ]; then
+            generate_batch 11 15
+        elif [ "$total_ai_msg" -eq 20 ]; then
+            generate_batch 16 20
         fi
+        regen_ai=0
+    fi
+
+    # ----------------------------
+    # 🤖 Generate AI body message
+    # ----------------------------
+    if [ "$regen_ai" = "2" ]; then
+        body_msg=$(generate_body)
         regen_ai=0
     fi
 
@@ -215,22 +341,40 @@ while true; do
     echo "🧠 AI Suggested Commits:" > /dev/tty
     echo "==============================" > /dev/tty
     i=1
-    while [ "$i" -le 12 ]; do
+    count=0
+
+    while [ "$i" -le 20 ]; do
         var="AI_MSG_$i"
         msg="${!var}"
 
         if [ -n "$msg" ]; then
             echo "[$i] $msg" > /dev/tty
+            count=$((count + 1))
+        fi
+
+        if [ -n "$msg" ]; then
+            if [ $((count % 5)) -eq 0 ] && [ "$count" -ne 0 ]; then
+                echo "" > /dev/tty
+            fi
         fi
 
         i=$((i + 1))
     done
+
+    if [ -z "$body_msg" ]; then
+        echo "No body"
+        remove_body=""
+    else
+        echo "$body_msg"
+        remove_body=" [R]emove Body"
+    fi
+
     echo "==============================" > /dev/tty
 
     # ----------------------------
     # 🎮 Menu
     # ----------------------------
-    printf "Accept [1-%s], [R]egenerate, [S]how Changes, Edit [E1,E2,E3], [M]anual ? " "$total_ai_msg" > /dev/tty
+    printf "Accept [1-%s], [A]dd 5 suggestions, Create/Recreate [B]ody%s, [S]how Changes, Edit [E1-E%s], [M]anual ? " "$total_ai_msg" "$remove_body" "$total_ai_msg" > /dev/tty
 
     if ! IFS= read -r choice < /dev/tty; then
         choice="1"
@@ -240,21 +384,23 @@ while true; do
 
     case "$choice" in
 
-        1|2|3|4|5|6|7|8|9|10|11|12)
+        1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20)
             if check_choice "$choice" $total_ai_msg; then
                 var="AI_MSG_$choice"
-                printf "%s\n" "${!var}" > "$COMMIT_MSG_FILE"
+                COMMIT_MSG=$(build_commit_message "${!var}" "$body_msg")
+                printf "%s" "$COMMIT_MSG" > "$COMMIT_MSG_FILE"
                 echo "✅ AI commit #$choice accepted" > /dev/tty
                 exit 0
             else
                 echo "❌ Please choose 1-$total_ai_msg" > /dev/tty
             fi
             ;;
-        e1|e2|e3|e4|e5|e6|e7|e8|e9|e10|e11|e12)
+        e1|e2|e3|e4|e5|e6|e7|e8|e9|e10|e11|e12|e13|e14|e15|e16|e17|e18|e19|e20)
             choice="${choice//e/}"
             if check_choice "$choice" $total_ai_msg; then
                 var="AI_MSG_$choice"
-                printf "%s\n" "${!var}" > "$COMMIT_MSG_FILE"
+                COMMIT_MSG=$(build_commit_message "${!var}" "$body_msg")
+                printf "%s" "$COMMIT_MSG" > "$COMMIT_MSG_FILE"
                 "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
                 exit 0
             else
@@ -270,14 +416,23 @@ while true; do
             git diff --cached
             ;;
 
-        r)
-            echo "🔄 regenerating AI commit..." > /dev/tty
+        a)
+            echo "🧠 Adding 5 AI commit suggestions..." > /dev/tty
             regen_ai=1
+            continue
+            ;;
+        b)
+            echo "🧠 Creating body..." > /dev/tty
+            regen_ai=2
+            continue
+            ;;
+        r)
+            body_msg=""
             continue
             ;;
 
         *)
-            echo "❌ Please choose 1-12, A, E, M, S or R." > /dev/tty
+            echo "❌ Please choose 1-$total_ai_msg, A, E, M, S or R." > /dev/tty
             ;;
     esac
 
