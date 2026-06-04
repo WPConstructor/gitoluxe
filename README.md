@@ -10,11 +10,11 @@ It enhances your workflow by analyzing staged changes and suggesting structured 
 - ⚡ Local inference via Ollama (no cloud required)
 - 👀 Interactive commit menu:
   - Accept AI message
+  - Add body suggestion (detailed commit explanation)
   - Edit AI message
   - Manual commit
   - Show staged changes
-  - Regenerate suggestion
-- 🔁 Regenerate AI suggestions without leaving the menu
+- 🔁 Generate up to 20 AI suggestions without leaving the menu
 - 🔒 Safe Git hook execution (no blocking or corruption)
 - 🧩 Scope detection (githooks, cli, ai, installer, etc.)
 - 📦 Lightweight installation script
@@ -28,43 +28,13 @@ The system hooks into Git’s `prepare-commit-msg` process:
 3. Generates a conventional commit message
 4. Shows interactive menu
 5. User selects action:
-   - Accept → writes commit message
-   - Regenerate → re-runs AI
+   - Accept 1-x → writes commit message
+   - Add 5 suggestions
+   - Create / Recreate Body
+   - Remove Body
    - Show Changes → displays diff
-   - Edit → opens editor
+   - Edit 1-x → opens editor
    - Manual → empty editor
-
-## 📦 Requirements
-
-- Git (installed in install path [git init])
-- Bash
-
-## 🚀 Installation
-
-Download & Run installer in bash (CLI):
-
-```
-curl -fsSL https://raw.githubusercontent.com/WPConstructor/ai-git/v0.1.0/git-ai-install.sh | bash
-```
-
-This will:
-- Install Ollama (if missing)
-- Pull `qwen2.5-coder:7b` model
-- Install Git hook into `.githooks/`
-- Enable `core.hooksPath`
-
-## ⚙️ Git Hook Setup
-
-The system uses a custom hooks directory:
-
-```
-git config core.hooksPath .githooks
-```
-
-Hook file:
-```
-.githooks/prepare-commit-msg
-```
 
 ## 🎮 Usage
 
@@ -77,7 +47,7 @@ git commit -m ""
 
 You will see:
 
-- AI-generated commit message
+- AI-generated commit messages
 - Interactive menu
 
 Example:
@@ -86,19 +56,27 @@ Example:
 ==============================
 🧠 AI Suggested Commit:
 ==============================
-feat(githooks): add staged diff preview before commit
+[1] refactor(githooks): clean up and standardize prepare-commit-msg script
+[2] refactor(githooks): clean up prepare-commit-msg script
+[3] fix(githooks): remove unnecessary backticks and formatting from commit body
+[4] refactor(githooks): clean up prepare-commit-msg script
+[5] refactor(githooks): clean up and optimize prepare-commit-msg script
+
+No body
 ==============================
 
-[A]ccept, [R]egenerate, [S]how Changes, [E]dit, [M]anual ?
+Accept [1-5], [A]dd 5 suggestions, Create/Recreate [B]ody, [S]how Changes, Edit [E1-E5], [M]anual
 ```
 
 ## 🔁 Menu Options
 
-- **A** → Accept AI commit message
-- **R** → Regenerate AI commit
-- **S** → Show staged diff
-- **E** → Edit AI suggestion
-- **M** → Write manual commit message
+- **1-x**   → Accept AI commit message
+- **A**     → Add 5 suggestions
+- **B**     → Create/Recreate body
+- **R**     → Remove body
+- **S**     → Show staged diff
+- **E1-Ex** → Edit AI suggestion
+- **M**     → Write manual commit message
 
 ## 🧠 Conventional Commit Style
 
