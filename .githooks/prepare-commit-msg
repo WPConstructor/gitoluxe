@@ -297,7 +297,12 @@ while true; do
     # ----------------------------
     if [ "$regen_ai" = "2" ]; then
         body_msg=$(generate_body)
-        body_msg="$(echo "$body_msg" | sed '/^```/d')"
+        body_msg="$(
+        echo "$body_msg" \
+        | sed 's/```.*//g' \
+        | sed 's/`//g' \
+        | sed '/^[[:space:]]*$/d'
+        )"
         regen_ai=0
     fi
 
