@@ -175,6 +175,14 @@ IMPORTANT:
 
 If you are unsure, still output ONLY the body text. No formatting.
 
+IMPORTANT RULES ABOUT FILE TYPES:
+
+- If the change affects .md (Markdown) files, treat them ONLY as documentation text.
+- NEVER treat Markdown files as source code.
+- Documentation updates, README changes, installation guides, usage examples, and other Markdown content should be described as documentation changes.
+- Focus on what information was added, removed, clarified, or improved in the documentation.
+- Only mention code-related behavior when actual source code changes are present in the diff.
+
 ---
 
 FORMAT:
@@ -301,6 +309,7 @@ while true; do
         echo "$body_msg" \
         | sed 's/```.*//g' \
         | sed 's/`//g' \
+        | sed 's/\*\*//g' \
         | sed '/^[[:space:]]*$/d'
         )"
         regen_ai=0
