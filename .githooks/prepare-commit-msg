@@ -150,27 +150,6 @@ docs(readme): improve installation instructions
 FINAL RULE:
 Return ONLY the commit message. Nothing else.")
 
-EXPLANATION="
-You are a senior software engineer.
-
-Explain EXACTLY what changed in the git diff.
-
-IMPORTANT RULES ABOUT FILE TYPES:
-- If the change affects .md (Markdown) files, treat them ONLY as documentation text.
-- NEVER treat Markdown files as source code.
-- Markdown changes are ALWAYS docs unless they clearly accompany a code feature change.
-- Markdown files describe documentation, not runtime behavior or logic.
-- Code files define behavior and functionality.
-- Always separate documentation changes from functional changes.
-
-Rules:
-- Be precise
-- List what was added, removed, or modified
-- Mention affected files
-- Do NOT output a commit message
-- Do NOT summarize too broadly
-"
-
 BODY_PROMPT="You are a senior software engineer writing Git commit messages.
 
 You will receive a git diff or a summary of changes.
@@ -191,6 +170,10 @@ RULES:
 - No emojis
 - No explanations
 - No extra text
+
+IMPORTANT:
+
+If you are unsure, still output ONLY the body text. No formatting.
 
 ---
 
@@ -234,22 +217,6 @@ generate_body() {
 # ----------------------------
 generate_ai() {
     printf "%s" "$INPUT_PROMPT" | ollama run qwen2.5-coder:7b "$PROMPT"
-
-# You are a senior software engineer and Git expert.
-# 
-# Generate ONLY a Git Conventional Commit message.
-# 
-# Rules:
-# - output exactly one line
-# - format: type(scope): description
-# - max 75 characters
-# - no explanations
-# - no markdown
-# - no periods
-# - imperative mood
-# - prefer feat over refactor when user-facing behavior changes
-# - describe impact, not implementation details
-# "
 }
 
 build_commit_message() {
@@ -330,6 +297,7 @@ while true; do
     # ----------------------------
     if [ "$regen_ai" = "2" ]; then
         body_msg=$(generate_body)
+        body_msg="$(echo "$body_msg" | sed '/^```/d')"
         regen_ai=0
     fi
 
