@@ -383,14 +383,14 @@ while true; do
                 var="AI_MSG_$choice"
                 COMMIT_MSG=$(build_commit_message "${!var}" "$body_msg")
                 printf "%s" "$COMMIT_MSG" > "$COMMIT_MSG_FILE"
-                "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
+                "${EDITOR:-nano}" "$COMMIT_MSG_FILE"
                 exit 0
             else
                 echo "❌ Please choose 1-$total_ai_msg" > /dev/tty
             fi
             ;;
         m)
-            "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2>&1
+            "${EDITOR:-nano}" "$COMMIT_MSG_FILE"
             exit 0
             ;;
 
