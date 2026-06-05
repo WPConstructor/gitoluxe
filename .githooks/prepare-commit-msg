@@ -216,6 +216,9 @@ Improves usability of the git hook by making suggestions reviewable."
 
 body_msg=""
 
+# ----------------------------
+# 🧠 Body AI generator function
+# ----------------------------
 generate_body() {
     printf "%s" "$INPUT_PROMPT" | ollama run qwen2.5-coder:7b "$BODY_PROMPT"
 }
@@ -277,7 +280,7 @@ regen_ai=1
 total_ai_msg=0
 
 # ----------------------------
-# 🎛 UI loop (safe)
+# 🎛 UI loop
 # ----------------------------
 while true; do
     # ----------------------------
@@ -316,7 +319,7 @@ while true; do
     fi
 
     # ----------------------------
-    # 🧠 Show suggestion
+    # 🧠 Show suggestions
     # ----------------------------
     echo > /dev/tty
     echo "==============================" > /dev/tty
