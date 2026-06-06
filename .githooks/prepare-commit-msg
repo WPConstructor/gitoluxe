@@ -14,9 +14,15 @@ case "$SOURCE" in
         ;;
 esac
 
-if [ -s "$COMMIT_MSG_FILE" ]; then
-    exit 0
-fi
+PRE_MSG=$(cat "$COMMIT_MSG_FILE" 2>/dev/null)
+
+case "$PRE_MSG" in
+    ""|ai)
+        ;;
+    *)
+        exit 0
+        ;;
+esac
 
 if [ ! -e /dev/tty ]; then
     exit 0
@@ -28,7 +34,9 @@ fi
 
 STAGED_FILES=$(git diff --cached --name-status)
 STAGED_STAT=$(git diff --cached --stat)
-DIFF=$(git diff --cached --unified=1)
+
+MAX_LINES=500
+DIFF="$(git diff --cached --unified=1 --no-color | head -n "$MAX_LINES")"
 
 # If nothing staged
 [ -z "$STAGED_FILES" ] && exit 0
@@ -44,7 +52,7 @@ STAGED FILES (IMPORTANT):
 STAGED STAT:
 %s
 
-FULL DIFF:
+SUMMARIZED DIFF:
 %s
 " "$STAGED_FILES" "$STAGED_STAT" "$DIFF")
 
@@ -541,10 +549,10 @@ while true; do
     done
 
     if [ -z "$body_msg" ]; then
-        echo "No body"
+        echo "No body" > /dev/tty
         remove_body=""
     else
-        echo "$body_msg"
+        echo "$body_msg" > /dev/tty
         remove_body=" [R]emove Body"
     fi
 
@@ -618,5 +626,3 @@ while true; do
 done
 
 exit 0;
-
-#test
