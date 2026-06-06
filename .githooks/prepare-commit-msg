@@ -67,27 +67,133 @@ You MUST follow ALL instructions exactly. No exceptions.
 
 ---
 
+## IMPORTANT RULES ABOUT COMMENTS
+
+Comments are part of the change and may describe the purpose of the modification.
+
+You MUST analyze and consider comment changes, including:
+- shell comments (# ...)
+- C/C++/Java/JavaScript comments (// ...)
+- block comments (/* ... */)
+- docstrings
+- documentation comments
+- inline code comments
+
+Comments may help explain:
+- intent
+- design decisions
+- bug fixes
+- behavior changes
+- configuration changes
+
+Do NOT ignore comments simply because they are not executable code.
+
+IMPORTANT:
+
+Comments and documentation alone do NOT indicate new functionality.
+
+A new feature exists only when executable behavior changes.
+
+If a diff only:
+- adds comments
+- updates comments
+- renames comments
+- improves documentation
+- changes labels inside comments
+- changes comment formatting
+- adds helper functions without changing runtime behavior
+- renames or restructures code without behavior change
+
+then it is NOT a feat.
+
+CRITICAL DISTINCTION:
+
+A CHANGE IN CODE STRUCTURE IS NOT A FEATURE.
+
+Only treat as a feature if:
+→ the user gains a NEW runtime capability
+→ or existing behavior becomes available for the first time
+
+NOT:
+→ new functions
+→ renamed functions
+→ moved code
+→ refactored logic
+→ improved readability
+→ added comments or labels
+
+If you are unsure whether something is a feature:
+→ DO NOT choose feat (default to refactor)
+
+If code and comments disagree:
+- trust the code
+- comments are only supporting context
+
+---
+
 ## STEP 1: ANALYZE THE CHANGE (internal reasoning only)
 
 Before deciding anything, you MUST understand:
+
 - what files changed
+- what executable code changed
+- what comments changed
+- what documentation changed
 - what was added, removed, or modified
-- what behavior changed (if any)
+- what actual behavior changed
 - whether the user experience changed
-- whether this introduces new functionality or only refactors/docs
+- whether functionality changed
+
+Focus primarily on executable behavior, not structure or naming.
+
+---
+
+## STEP 2: DETERMINE WHETHER A FEATURE WAS ADDED
+
+CRITICAL RULE:
+
+Lines starting with COMMENT: are NON-BEHAVIORAL and must be ignored for feat detection.
+
+They MUST NOT be used to determine:
+- new features
+- user-visible functionality
+- behavior changes
+- refactor vs feat decisions
+
+Determine whether the diff introduces ANY NEW user-visible functionality.
 
 User-visible functionality includes:
-- new commands or CLI options
-- new menu items or prompts
+- new commands
+- new CLI flags
+- new menu actions
+- new prompts
 - new configuration options
 - new user interactions
-- new features or capabilities
+- new capabilities
+- new behavior
+- new outputs
+- new workflows
 
-If ANY user-visible functionality exists:
+A feature requires executable code that creates or enables new behavior.
+
+The following are NOT features by themselves:
+- comments
+- documentation
+- README changes
+- code annotations
+- formatting changes
+- variable renames
+- function renames
+- label changes
+- text cleanup
+- refactoring without behavior change
+
+If ANY new user-visible functionality exists:
 → commit type MUST be feat
-→ ignore refactoring noise
+→ ignore accompanying refactoring
 
-Otherwise choose ONE:
+Otherwise choose EXACTLY ONE:
+
 - fix = bug correction
 - refactor = code restructuring without behavior change
 - chore = maintenance, cleanup, tooling
@@ -99,9 +205,46 @@ Otherwise choose ONE:
 
 ---
 
-## STEP 2: SCOPE DETECTION
+## STEP 3: DETERMINE THE PRIMARY CHANGE
+
+Identify the SINGLE most important outcome.
+
+Describe what actually changed.
+
+Prefer:
+- what was added
+- what was fixed
+- what was improved
+- what behavior changed
+
+Avoid vague descriptions:
+
+BAD:
+- update code
+- improve script
+- clean up logic
+- miscellaneous changes
+- refactor files
+- improve functionality
+
+GOOD:
+- add commit body generation
+- classify markdown files as documentation
+- support multiple AI commit suggestions
+- show staged diff before commit
+- prevent markdown output from AI responses
+- improve hook comments
+- clarify menu labels
+
+If the diff mainly changes comments, labels, documentation, or naming:
+describe it directly.
+
+---
+
+## STEP 4: SCOPE DETECTION
 
 Choose ONE scope if clearly applicable:
+
 - githooks
 - ai
 - ollama
@@ -113,25 +256,31 @@ If unclear, omit scope.
 
 ---
 
-## STEP 3: OUTPUT FORMAT (STRICT)
+## STEP 5: OUTPUT FORMAT (STRICT)
 
 You MUST output EXACTLY ONE LINE and NOTHING ELSE.
 
 ABSOLUTE RULES:
+
 - single line only
 - no newline characters
-- no markdown (no backticks, no code blocks)
+- no markdown
+- no backticks
+- no code blocks
 - no explanations
 - no multiple suggestions
 - no JSON
 - no bullet points
+- no prefixes or suffixes
 - no extra text
 - no trailing period
 - max 75 characters
-- imperative mood (add, fix, remove, update)
-- describe user impact, not implementation details
+- imperative mood (add, fix, remove, update, clarify, improve, support)
+- describe the actual change
+- describe user impact when applicable
 
 FORMAT:
+
 type(scope): description
 
 ---
@@ -140,15 +289,26 @@ type(scope): description
 
 feat(githooks): add staged diff preview before commit
 feat(cli): add interactive commit selection
-fix(ai): handle empty diff generation
-chore(installer): update Ollama installation logic
+feat(ai): generate detailed commit body suggestions
+fix(ai): prevent markdown output in commit messages
+fix(ai): classify markdown files as documentation
 refactor(commit): simplify message generation flow
+refactor(githooks): simplify commit hook menu logic
 docs(readme): improve installation instructions
+docs(githooks): clarify body generator comments
+chore(installer): update Ollama installation logic
 
 ---
 
 FINAL RULE:
-Return ONLY the commit message. Nothing else.")
+
+Return ONLY the commit message.
+
+Do NOT explain.
+Do NOT output markdown.
+Do NOT output multiple lines.
+Do NOT output anything except the commit message.
+")
 
 BODY_PROMPT="You are a senior software engineer writing Git commit messages.
 
@@ -175,6 +335,8 @@ IMPORTANT:
 
 If you are unsure, still output ONLY the body text. No formatting.
 
+---
+
 IMPORTANT RULES ABOUT FILE TYPES:
 
 - If the change affects .md (Markdown) files, treat them ONLY as documentation text.
@@ -182,6 +344,32 @@ IMPORTANT RULES ABOUT FILE TYPES:
 - Documentation updates, README changes, installation guides, usage examples, and other Markdown content should be described as documentation changes.
 - Focus on what information was added, removed, clarified, or improved in the documentation.
 - Only mention code-related behavior when actual source code changes are present in the diff.
+
+---
+
+IMPORTANT RULES ABOUT COMMENTS:
+
+Comments are explanatory context and MUST be analyzed as part of the change.
+
+You MUST consider comments in:
+- shell scripts (# ...)
+- C/C++/Java/JavaScript/TypeScript (// ...)
+- block comments (/* ... */)
+- docstrings
+- inline comments
+
+However:
+
+- Comments alone do NOT represent functionality changes.
+- Adding, removing, renaming, or formatting comments does NOT imply new behavior.
+- NEVER infer new features from comments, labels, or annotations.
+- Only executable code changes define behavior changes.
+
+If the diff only changes comments or documentation:
+→ describe it as documentation clarification or code annotation improvement
+→ do NOT describe it as a feature or behavior change
+
+If comments explain intent, use them only to better describe WHAT the code already does.
 
 ---
 
@@ -215,6 +403,12 @@ Adds options to regenerate, edit, or manually write commit messages.
 Improves usability of the git hook by making suggestions reviewable."
 
 body_msg=""
+
+INPUT_PROMPT=$(printf "%s" "$INPUT_PROMPT" | sed -E '
+s|^([+-])[[:space:]]*#|\1 COMMENT:|;
+s|^([+-])[[:space:]]*//|\1 COMMENT:|;
+s|^([+-])[[:space:]]*/\*|\1 COMMENT:|;
+')
 
 # ----------------------------
 # 🧠 Body AI generator function
