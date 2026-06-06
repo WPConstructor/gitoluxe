@@ -58,8 +58,6 @@ if [ -f "$HOOK_FILE" ]; then
     printf "Overwrite with latest version from GitHub? (y/N): " > /dev/tty
     read answer < /dev/tty
 
-    exit 1
-
     case "$answer" in
         y|Y)
             echo "⬇️ Overwriting hook..."
@@ -73,8 +71,6 @@ else
     echo "⬇️ Installing hook (not found locally)..."
     curl -fsSL "$REPO_URL" -o "$HOOK_FILE"
 fi
-
-[add git initialized here]
 
 # -------------------------
 # 5. Make hook executable
