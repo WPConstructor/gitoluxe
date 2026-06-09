@@ -73,7 +73,8 @@ PROMPT="Generate exactly one Conventional Commit message.
 Rules:
 - Output one line only, no markdown, explanations, quotes, code fences, or extra text.
 - Format: type(scope): description
-- Max 75 chars.
+- If multiple distinct changes or features are present, separate them with a comma (e.g., type(scope): desc1, type(scope): desc2).
+- Max 120 chars.
 - Use imperative mood.
 - Describe the primary change, not the implementation details.
 
