@@ -20,7 +20,10 @@ case "$PRE_MSG" in
     ""|ai)
         ;;
     *)
-        exit 0
+        # Allow amend commits (source is 'commit') to proceed even if the file isn't empty
+        if [ "$SOURCE" != "commit" ]; then
+            exit 0
+        fi
         ;;
 esac
 
@@ -32,13 +35,22 @@ fi
 # 📦 Collect staged data
 # ----------------------------
 
+MAX_LINES=500
 STAGED_FILES=$(git diff --cached --name-status)
 STAGED_STAT=$(git diff --cached --stat)
-
-MAX_LINES=500
 DIFF="$(git diff --cached --unified=1 --no-color | head -n "$MAX_LINES")"
 
-# If nothing staged
+# If nothing staged, check if we are amending or overriding a message.
+# This allows the AI to see what is currently in the commit we are modifying.
+if [ -z "$STAGED_FILES" ]; then
+    if [ "$SOURCE" = "commit" ] || [ "$SOURCE" = "message" ]; then
+        STAGED_FILES=$(git show --name-status --format="" HEAD 2>/dev/null || echo "")
+        STAGED_STAT=$(git show --stat --format="" HEAD 2>/dev/null || echo "")
+        DIFF=$(git show --unified=1 --no-color --format="" HEAD 2>/dev/null | head -n "$MAX_LINES" || echo "")
+    fi
+fi
+
+# If still nothing staged (e.g., a fresh repo with no commits and no staged files)
 [ -z "$STAGED_FILES" ] && exit 0
 
 # ----------------------------
@@ -56,359 +68,66 @@ SUMMARIZED DIFF:
 %s
 " "$STAGED_FILES" "$STAGED_STAT" "$DIFF")
 
-PROMPT=$(printf "
-You are a senior software engineer and Git expert.
-
-You generate ONLY Git Conventional Commit messages.
-
-You MUST follow ALL instructions exactly. No exceptions.
-
----
-
-## IMPORTANT RULES ABOUT FILE TYPES
-
-- If the change affects .md (Markdown) files, treat them ONLY as documentation text.
-- NEVER treat Markdown files as source code.
-- Markdown files describe documentation, not runtime behavior or logic.
-- Markdown changes are ALWAYS docs unless they clearly accompany a code feature change.
-- If both code and markdown are changed, prioritize the code change for commit type.
-
----
-
-## IMPORTANT RULES ABOUT COMMENTS
-
-Comments are part of the change and may describe the purpose of the modification.
-
-You MUST analyze and consider comment changes, including:
-- shell comments (# ...)
-- C/C++/Java/JavaScript comments (// ...)
-- block comments (/* ... */)
-- docstrings
-- documentation comments
-- inline code comments
-
-Comments may help explain:
-- intent
-- design decisions
-- bug fixes
-- behavior changes
-- configuration changes
-
-Do NOT ignore comments simply because they are not executable code.
-
-IMPORTANT:
-
-Comments and documentation alone do NOT indicate new functionality.
-
-A new feature exists only when executable behavior changes.
-
-If a diff only:
-- adds comments
-- updates comments
-- renames comments
-- improves documentation
-- changes labels inside comments
-- changes comment formatting
-- adds helper functions without changing runtime behavior
-- renames or restructures code without behavior change
-
-then it is NOT a feat.
-
-CRITICAL DISTINCTION:
-
-A CHANGE IN CODE STRUCTURE IS NOT A FEATURE.
-
-Only treat as a feature if:
-→ the user gains a NEW runtime capability
-→ or existing behavior becomes available for the first time
-
-NOT:
-→ new functions
-→ renamed functions
-→ moved code
-→ refactored logic
-→ improved readability
-→ added comments or labels
-
-If you are unsure whether something is a feature:
-→ DO NOT choose feat (default to refactor)
-
-If code and comments disagree:
-- trust the code
-- comments are only supporting context
-
----
-
-## STEP 1: ANALYZE THE CHANGE (internal reasoning only)
-
-Before deciding anything, you MUST understand:
-
-- what files changed
-- what executable code changed
-- what comments changed
-- what documentation changed
-- what was added, removed, or modified
-- what actual behavior changed
-- whether the user experience changed
-- whether functionality changed
-
-Focus primarily on executable behavior, not structure or naming.
-
----
-
-## STEP 2: DETERMINE WHETHER A FEATURE WAS ADDED
-
-CRITICAL RULE:
-
-Lines starting with COMMENT: are NON-BEHAVIORAL and must be ignored for feat detection.
-
-They MUST NOT be used to determine:
-- new features
-- user-visible functionality
-- behavior changes
-- refactor vs feat decisions
-
-Determine whether the diff introduces ANY NEW user-visible functionality.
-
-User-visible functionality includes:
-- new commands
-- new CLI flags
-- new menu actions
-- new prompts
-- new configuration options
-- new user interactions
-- new capabilities
-- new behavior
-- new outputs
-- new workflows
-
-A feature requires executable code that creates or enables new behavior.
-
-The following are NOT features by themselves:
-- comments
-- documentation
-- README changes
-- code annotations
-- formatting changes
-- variable renames
-- function renames
-- label changes
-- text cleanup
-- refactoring without behavior change
-
-If ANY new user-visible functionality exists:
-→ commit type MUST be feat
-→ ignore accompanying refactoring
-
-Otherwise choose EXACTLY ONE:
-
-- fix = bug correction
-- refactor = code restructuring without behavior change
-- chore = maintenance, cleanup, tooling
-- docs = documentation or markdown changes
-- test = test changes
-- perf = performance improvements
-- build = build system changes
-- ci = CI/CD changes
-
----
-
-## STEP 3: DETERMINE THE PRIMARY CHANGE
-
-Identify the SINGLE most important outcome.
-
-Describe what actually changed.
-
-Prefer:
-- what was added
-- what was fixed
-- what was improved
-- what behavior changed
-
-Avoid vague descriptions:
-
-BAD:
-- update code
-- improve script
-- clean up logic
-- miscellaneous changes
-- refactor files
-- improve functionality
-
-GOOD:
-- add commit body generation
-- classify markdown files as documentation
-- support multiple AI commit suggestions
-- show staged diff before commit
-- prevent markdown output from AI responses
-- improve hook comments
-- clarify menu labels
-
-If the diff mainly changes comments, labels, documentation, or naming:
-describe it directly.
-
----
-
-## STEP 4: SCOPE DETECTION
-
-Choose ONE scope if clearly applicable:
-
-- githooks
-- ai
-- ollama
-- commit
-- cli
-- installer
-
-If unclear, omit scope.
-
----
-
-## STEP 5: OUTPUT FORMAT (STRICT)
-
-You MUST output EXACTLY ONE LINE and NOTHING ELSE.
-
-ABSOLUTE RULES:
-
-- single line only
-- no newline characters
-- no markdown
-- no backticks
-- no code blocks
-- no explanations
-- no multiple suggestions
-- no JSON
-- no bullet points
-- no prefixes or suffixes
-- no extra text
-- no trailing period
-- max 75 characters
-- imperative mood (add, fix, remove, update, clarify, improve, support)
-- describe the actual change
-- describe user impact when applicable
-
-FORMAT:
-
-type(scope): description
-
----
-
-## GOOD EXAMPLES
-
-feat(githooks): add staged diff preview before commit
-feat(cli): add interactive commit selection
-feat(ai): generate detailed commit body suggestions
-fix(ai): prevent markdown output in commit messages
-fix(ai): classify markdown files as documentation
-refactor(commit): simplify message generation flow
-refactor(githooks): simplify commit hook menu logic
-docs(readme): improve installation instructions
-docs(githooks): clarify body generator comments
-chore(installer): update Ollama installation logic
-
----
-
-FINAL RULE:
-
-Return ONLY the commit message.
-
-Do NOT explain.
-Do NOT output markdown.
-Do NOT output multiple lines.
-Do NOT output anything except the commit message.
-")
-
-BODY_PROMPT="You are a senior software engineer writing Git commit messages.
-
-You will receive a git diff or a summary of changes.
-
-Your task is to generate ONLY the COMMIT BODY (not the subject line).
-
----
-
-RULES:
-
-- Output plain text only
-- No subject line
-- No commit type (no feat/fix/refactor)
-- No markdown
-- No code blocks
-- No JSON
-- No bullet points unless absolutely necessary
-- No emojis
-- No explanations
-- No extra text
-
-IMPORTANT:
-
-If you are unsure, still output ONLY the body text. No formatting.
-
----
-
-IMPORTANT RULES ABOUT FILE TYPES:
-
-- If the change affects .md (Markdown) files, treat them ONLY as documentation text.
-- NEVER treat Markdown files as source code.
-- Documentation updates, README changes, installation guides, usage examples, and other Markdown content should be described as documentation changes.
-- Focus on what information was added, removed, clarified, or improved in the documentation.
-- Only mention code-related behavior when actual source code changes are present in the diff.
-
----
-
-IMPORTANT RULES ABOUT COMMENTS:
-
-Comments are explanatory context and MUST be analyzed as part of the change.
-
-You MUST consider comments in:
-- shell scripts (# ...)
-- C/C++/Java/JavaScript/TypeScript (// ...)
-- block comments (/* ... */)
-- docstrings
-- inline comments
-
-However:
-
-- Comments alone do NOT represent functionality changes.
-- Adding, removing, renaming, or formatting comments does NOT imply new behavior.
-- NEVER infer new features from comments, labels, or annotations.
-- Only executable code changes define behavior changes.
-
-If the diff only changes comments or documentation:
-→ describe it as documentation clarification or code annotation improvement
-→ do NOT describe it as a feature or behavior change
-
-If comments explain intent, use them only to better describe WHAT the code already does.
-
----
-
-FORMAT:
-
-Write a short, clear explanation of WHAT changed and WHY.
-
-Structure:
-- first line: high-level summary of the change
-- next lines: important details (what was added, removed, or modified)
-- keep it concise (max ~5 lines)
-- focus on behavior and impact, not code structure
-
----
-
-IMPORTANT:
-
-- Explain user impact if applicable
-- Mention key functional changes
-- Ignore minor refactors unless important
-- Treat .md files as documentation only
-
----
-
-EXAMPLE OUTPUT:
-
-Adds interactive commit menu to improve developer workflow
-
-Users can now preview AI-generated commit messages before accepting them.
-Adds options to regenerate, edit, or manually write commit messages.
-Improves usability of the git hook by making suggestions reviewable."
+PROMPT="Generate exactly one Conventional Commit message.
+
+Rules:
+- Output one line only, no markdown, explanations, quotes, code fences, or extra text.
+- Format: type(scope): description
+- Max 75 chars.
+- Use imperative mood.
+- Describe the primary change, not the implementation details.
+
+Type selection:
+- feat: new user-visible/runtime behavior or capability.
+- fix: bug fix.
+- refactor: code restructuring without behavior change.
+- docs: documentation/Markdown-only changes.
+- test: tests only.
+- perf: performance improvement.
+- build: build/dependency changes.
+- ci: CI/CD changes.
+- chore: maintenance/tooling/cleanup.
+
+Important:
+- Markdown files are documentation unless accompanying a code change.
+- Comments provide intent and context but do not make a change a feat.
+- New functions, renames, moves, cleanup, comments, labels, docs, and formatting are not features by themselves.
+- If unsure between feat and refactor, choose refactor.
+- If any new user-visible functionality exists, choose feat.
+
+Scope (if obvious):
+githooks, ai, ollama, commit, cli, installer
+
+Return only the commit message."
+
+BODY_PROMPT="Generate only the Git commit body.
+
+Rules:
+- Plain text only.
+- No subject line.
+- No commit type.
+- No markdown, bullets, JSON, code blocks, emojis, or explanations.
+- Output only the body.
+
+Interpretation:
+- .md files are documentation, not source code.
+- Describe documentation changes as documentation changes.
+- Comments provide context but do not imply behavior changes.
+- Do not infer features from comments, labels, annotations, formatting, or documentation.
+- Behavior changes come only from executable code changes.
+
+Format:
+- First line: concise summary of what changed and why.
+- Up to 4 additional lines with important details.
+- Focus on behavior, user impact, and key changes.
+- Ignore minor refactors unless they affect behavior.
+
+Example:
+
+Adds interactive commit selection to improve workflow
+
+Allows reviewing AI-generated commit messages before use.
+Supports regenerating or editing suggestions."
 
 body_msg=""
 
