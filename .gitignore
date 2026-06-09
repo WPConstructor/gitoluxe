@@ -1,0 +1,25 @@
+# Composer
+/vendor/
+composer.lock
+
+# Node
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Build
+/build/
+
+# PHPUnit
+/tests/logs/
+/.phpunit.cache/
+.phpunit.result.cache
