@@ -88,28 +88,29 @@ fi
 # 📦 Collect staged data
 # ----------------------------
 
-STAGED_FILES=$(git diff --cached --name-status)
-STAGED_STAT=$(git diff --cached --stat)
-
 MAX_CHARS=7000
 
-DIFF="$(git diff --cached --unified=1 --no-color | head -c "$MAX_CHARS")"
+STAGED_FILES=$(git diff --cached --name-status)
+STAGED_STAT=$(git diff --cached --stat)
+DIFF=$(git diff --cached --unified=1 --no-color | head -c "$MAX_CHARS")
 
-# If nothing staged, check if we are amending or overriding a message.
-# This allows the AI to see what is currently in the commit we are modifying.
+# If nothing staged, check commit context (amend / override)
 if [ -z "$STAGED_FILES" ]; then
     if [ "$SOURCE" = "commit" ] || [ "$SOURCE" = "message" ]; then
-        STAGED_FILES=$(git show --name-status --format="" HEAD 2>/dev/null || echo "")
-        STAGED_STAT=$(git show --stat --format="" HEAD 2>/dev/null || echo "")
-        DIFF=$(git show --unified=1 --no-color --format="" HEAD 2>/dev/null | head -c "$MAX_CHARS" || echo "")
+
+        STAGED_FILES=$(git show --name-status --format="" HEAD 2>/dev/null | head -c "$MAX_CHARS")
+        STAGED_STAT=$(git show --stat --format="" HEAD 2>/dev/null | head -c "$MAX_CHARS")
+
+        DIFF=$(git diff HEAD --unified=1 --no-color 2>/dev/null | head -c "$MAX_CHARS")
+
+        if [ -z "$DIFF" ]; then
+            DIFF=$(git show --unified=1 --no-color HEAD 2>/dev/null | head -c "$MAX_CHARS")
+        fi
     fi
 fi
 
 DIFF_CHAR_COUNT=${#DIFF}
 [ "$DIFF_CHAR_COUNT" -eq "$MAX_CHARS" ] && DIFF="${DIFF}\n\n... (truncated)"
-
-# If still nothing staged (e.g., a fresh repo with no commits and no staged files)
-[ -z "$STAGED_FILES" ] && exit 0
 
 # ----------------------------
 # 🧠 Build AI INPUT_PROMPT
@@ -387,7 +388,13 @@ while true; do
             ;;
 
         c)
-            git diff --cached
+            if git diff --cached | grep -q .; then
+                git diff --cached
+            elif git diff HEAD | grep -q .; then
+                git diff HEAD
+            else
+                git show --unified=1 --no-color HEAD
+            fi
             ;;
 
         a)
