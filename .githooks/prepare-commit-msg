@@ -3,60 +3,62 @@
 set -e
 
 REQUIRED_GB=6
-
-# Get RAM (in GB)
-ram_gb=$(free -g | awk '/^Mem:/ {print $7}')
-
-# Get VRAM (best-effort, NVIDIA only)
-vram_gb=0
-if command -v nvidia-smi >/dev/null 2>&1; then
-    vram_gb=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | awk '{sum+=$1} END {print sum/1024}')
-fi
-
-# Fallback if VRAM is empty
-vram_gb=${vram_gb:-0}
-
-ollama_gb=$(ollama ps | awk '
-NR > 1 {
-    size=$3
-    unit=$4
-
-    if (unit == "GB") {
-        sum += size
-    } else if (unit == "MB") {
-        sum += size / 1024
-    }
-}
-END {
-    printf "%.2f", sum + 0
-}')
-
-# Fallback safety
-ollama_gb=${ollama_gb:-0}
-
-# Total available memory estimate (RAM + VRAM + Ollama usage)
-total_gb=$(awk "BEGIN {print $ram_gb + $vram_gb + $ollama_gb}")
-
-if (( $(echo "$total_gb < $REQUIRED_GB" | bc -l) )); then
-    echo "⚠️ Warning: Low memory detected (${total_gb} GB available). Qwen 2.5 7B may run poorly." > /dev/tty
-
-    read -r -p "Continue anyway? (Y/N): " choice < /dev/tty > /dev/tty
-
-    case "$choice" in
-        [Yy]*) echo "Continuing..." > /dev/tty ;;
-        [Nn]*)
-            echo "Exiting..." > /dev/tty
-            exit 1
-            ;;
-        *)
-            echo "Invalid choice. Exiting..." > /dev/tty
-            exit 1
-            ;;
-    esac
-fi
-
+MAX_CHARS=7000
 COMMIT_MSG_FILE="$1"
 SOURCE="$2"
+
+# ----------------------------
+# 🛠️ Utilities
+# ----------------------------
+
+print_tty() {
+    echo -e "$@" > /dev/tty
+}
+
+# ----------------------------
+# ⚙️ System Checks
+# ----------------------------
+
+check_resources() {
+    local free_ram_gb=$(free -g | awk '/^Mem:/ {print $7}')
+    local free_vram_gb=0
+    
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        free_vram_gb=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | awk '{sum+=$1} END {print sum/1024}')
+    fi
+    free_vram_gb=${free_vram_gb:-0}
+
+    local ollama_used_gb=$(ollama ps 2>/dev/null | awk '
+        NR > 1 {
+            size=$3; unit=$4
+            if (unit == "GB") sum += size
+            else if (unit == "MB") sum += size / 1024
+        }
+        END { printf "%.2f", sum + 0 }
+    ')
+    ollama_used_gb=${ollama_used_gb:-0}
+
+    local total_mem_gb=$(awk "BEGIN {print $free_ram_gb + $free_vram_gb + $ollama_used_gb}")
+
+    if (( $(echo "$total_mem_gb < $REQUIRED_GB" | bc -l) )); then
+        print_tty "⚠️ Warning: Low memory detected (${total_mem_gb} GB available). Qwen 2.5 7B may run poorly."
+        read -r -p "Continue anyway? (Y/N): " choice < /dev/tty > /dev/tty
+
+        case "$choice" in
+            [Yy]*) print_tty "Continuing..." ;;
+            [Nn]*)
+                print_tty "Exiting..."
+                exit 1
+                ;;
+            *)
+                print_tty "Invalid choice. Exiting..."
+                exit 1
+                ;;
+        esac
+    fi
+}
+
+check_resources
 
 # ----------------------------
 # 🚫 Skip unsafe contexts
@@ -67,13 +69,13 @@ case "$SOURCE" in
         ;;
 esac
 
-PRE_MSG=$(cat "$COMMIT_MSG_FILE" 2>/dev/null)
+existing_msg=$(cat "$COMMIT_MSG_FILE" 2>/dev/null)
 
-case "$PRE_MSG" in
+case "$existing_msg" in
     ""|ai)
         ;;
     *)
-        # Allow amend commits (source is 'commit') to proceed even if the file isn't empty
+        # Allow amend commits to proceed even if the file isn't empty
         if [ "$SOURCE" != "commit" ]; then
             exit 0
         fi
@@ -88,35 +90,31 @@ fi
 # 📦 Collect staged data
 # ----------------------------
 
-MAX_CHARS=7000
-
-STAGED_FILES=$(git diff --cached --name-status)
-STAGED_STAT=$(git diff --cached --stat)
-DIFF=$(git diff --cached --unified=1 --no-color | head -c "$MAX_CHARS")
+staged_files=$(git diff --cached --name-status)
+staged_stat=$(git diff --cached --stat)
+staged_diff=$(git diff --cached --unified=1 --no-color | head -c "$MAX_CHARS")
 
 # If nothing staged, check commit context (amend / override)
-if [ -z "$STAGED_FILES" ]; then
+if [ -z "$staged_files" ]; then
     if [ "$SOURCE" = "commit" ] || [ "$SOURCE" = "message" ]; then
+        staged_files=$(git show --name-status --format="" HEAD 2>/dev/null | head -c "$MAX_CHARS")
+        staged_stat=$(git show --stat --format="" HEAD 2>/dev/null | head -c "$MAX_CHARS")
+        staged_diff=$(git diff HEAD --unified=1 --no-color 2>/dev/null | head -c "$MAX_CHARS")
 
-        STAGED_FILES=$(git show --name-status --format="" HEAD 2>/dev/null | head -c "$MAX_CHARS")
-        STAGED_STAT=$(git show --stat --format="" HEAD 2>/dev/null | head -c "$MAX_CHARS")
-
-        DIFF=$(git diff HEAD --unified=1 --no-color 2>/dev/null | head -c "$MAX_CHARS")
-
-        if [ -z "$DIFF" ]; then
-            DIFF=$(git show --unified=1 --no-color HEAD 2>/dev/null | head -c "$MAX_CHARS")
+        if [ -z "$staged_diff" ]; then
+            staged_diff=$(git show --unified=1 --no-color HEAD 2>/dev/null | head -c "$MAX_CHARS")
         fi
     fi
 fi
 
-DIFF_CHAR_COUNT=${#DIFF}
-[ "$DIFF_CHAR_COUNT" -eq "$MAX_CHARS" ] && DIFF="${DIFF}\n\n... (truncated)"
+diff_len=${#staged_diff}
+[ "$diff_len" -eq "$MAX_CHARS" ] && staged_diff="${staged_diff}\n\n... (truncated)"
 
 # ----------------------------
-# 🧠 Build AI INPUT_PROMPT
+# 🧠 AI Prompts & Data
 # ----------------------------
 
-INPUT_PROMPT=$(printf "
+diff_payload=$(printf "
 STAGED FILES (IMPORTANT):
 %s
 
@@ -125,9 +123,13 @@ STAGED STAT:
 
 SUMMARIZED DIFF:
 %s
-" "$STAGED_FILES" "$STAGED_STAT" "$DIFF")
+" "$staged_files" "$staged_stat" "$staged_diff" | sed -E '
+    s|^([+-])[[:space:]]*#|\1 COMMENT:|;
+    s|^([+-])[[:space:]]*//|\1 COMMENT:|;
+    s|^([+-])[[:space:]]*/\*|\1 COMMENT:|;
+')
 
-PROMPT="Generate exactly one Conventional Commit message.
+SUBJECT_PROMPT="Generate exactly one Conventional Commit message.
 
 Rules:
 - Output one line only, no markdown, explanations, quotes, code fences, or extra text.
@@ -188,26 +190,16 @@ Adds interactive commit selection to improve workflow
 Allows reviewing AI-generated commit messages before use.
 Supports regenerating or editing suggestions."
 
-body_msg=""
-
-INPUT_PROMPT=$(printf "%s" "$INPUT_PROMPT" | sed -E '
-s|^([+-])[[:space:]]*#|\1 COMMENT:|;
-s|^([+-])[[:space:]]*//|\1 COMMENT:|;
-s|^([+-])[[:space:]]*/\*|\1 COMMENT:|;
-')
-
 # ----------------------------
-# 🧠 Body AI generator function
+# 🧠 AI generator functions
 # ----------------------------
+
 generate_body() {
-    printf "%s" "$INPUT_PROMPT" | ollama run qwen2.5-coder:7b "$BODY_PROMPT"
+    printf "%s" "$diff_payload" | ollama run qwen2.5-coder:7b "$BODY_PROMPT"
 }
 
-# ----------------------------
-# 🧠 AI generator function
-# ----------------------------
-generate_ai() {
-    printf "%s" "$INPUT_PROMPT" | ollama run qwen2.5-coder:7b "$PROMPT"
+generate_subject() {
+    printf "%s" "$diff_payload" | ollama run qwen2.5-coder:7b "$SUBJECT_PROMPT"
 }
 
 build_commit_message() {
@@ -222,44 +214,32 @@ build_commit_message() {
 }
 
 cleanup_ai_msg() {
-    printf "%s" "$1" \
-        | sed 's/[[:space:]]\+/ /g' \
-        | sed 's/`//g' \
-        | tr -d '\n' \
-        | tr -d '\t' \
-        | cut -c1-150
-}
-
-generate_batch() {
-    start=$1
-    end=$2
-
-    i=$start
-    while [ "$i" -le "$end" ]; do
-        msg=$(generate_ai)
-        msg=$(cleanup_ai_msg "$msg")
-
-        printf -v "AI_MSG_$i" '%s' "$msg"
-
-        i=$((i + 1))
-    done
+    echo "$1" | sed -E 's/[[:space:]]+/ /g; s/`//g' | tr -d '\n\t' | cut -c1-150
 }
 
 check_choice() {
     local choice="$1"
     local max="$2"
+    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$max" ]
+}
 
-    if ! [ "$choice" -eq "$choice" ] 2>/dev/null; then
-        return 1
-    fi
-
-    [ "$choice" -le "$max" ]
+generate_batch() {
+    local start=$1
+    local end=$2
+    local idx=$start
+    while [ "$idx" -le "$end" ]; do
+        msg=$(generate_subject)
+        msg=$(cleanup_ai_msg "$msg")
+        printf -v "AI_MSG_$idx" '%s' "$msg"
+        idx=$((idx + 1))
+    done
 }
 
 regen_ai=1
 total_ai_msg=0
 gen_time_info=""
 body_time_info=""
+body_msg=""
 
 # ----------------------------
 # 🎛 UI loop
@@ -271,18 +251,11 @@ while true; do
     if [ "$regen_ai" = "1" ]; then
         start_t=$SECONDS
         total_ai_msg=$((total_ai_msg + 5))
-        if [ "$total_ai_msg" -gt 20 ]; then
-            total_ai_msg=20
-        fi  
-        if [ "$total_ai_msg" -eq 5 ]; then
-            generate_batch 1 5
-        elif [ "$total_ai_msg" -eq 10 ]; then
-            generate_batch 6 10
-        elif [ "$total_ai_msg" -eq 15 ]; then
-            generate_batch 11 15
-        elif [ "$total_ai_msg" -eq 20 ]; then
-            generate_batch 16 20
-        fi
+        [ "$total_ai_msg" -gt 20 ] && total_ai_msg=20
+        start_idx=$((total_ai_msg - 4))
+        [ "$start_idx" -lt 1 ] && start_idx=1
+
+        generate_batch "$start_idx" "$total_ai_msg"
         gen_time_info=" (took $((SECONDS - start_t))s)"
         regen_ai=0
     fi
@@ -307,79 +280,68 @@ while true; do
     # ----------------------------
     # 🧠 Show suggestions
     # ----------------------------
-    echo > /dev/tty
-    echo "==============================" > /dev/tty
-    echo "🧠 AI Suggested Commits$gen_time_info ($DIFF_CHAR_COUNT chars):" > /dev/tty
-    echo "==============================" > /dev/tty
-    i=1
-    count=0
+    print_tty "\n=============================="
+    print_tty "🧠 AI Suggested Commits$gen_time_info ($diff_len chars):"
+    print_tty "=============================="
 
-    while [ "$i" -le 20 ]; do
-        var="AI_MSG_$i"
-        msg="${!var}"
-
-        if [ -n "$msg" ]; then
-            echo "[$i] $msg" > /dev/tty
-            count=$((count + 1))
-        fi
+    idx=1
+    display_count=0
+    while [ "$idx" -le 20 ]; do
+        var_name="AI_MSG_$idx"
+        msg="${!var_name}"
 
         if [ -n "$msg" ]; then
-            if [ $((count % 5)) -eq 0 ] && [ "$count" -ne 0 ]; then
-                echo "" > /dev/tty
+            print_tty "[$idx] $msg"
+            display_count=$((display_count + 1))
+            if [ $((display_count % 5)) -eq 0 ]; then
+                print_tty ""
             fi
         fi
-
-        i=$((i + 1))
+        idx=$((idx + 1))
     done
 
     if [ -z "$body_msg" ]; then
-        echo "No body" > /dev/tty
+        print_tty "No body"
         remove_body=""
     else
-        echo "$body_msg$body_time_info" > /dev/tty
+        print_tty "$body_msg$body_time_info"
         remove_body=", [R]emove Body"
     fi
-
-    echo "==============================" > /dev/tty
+    print_tty "=============================="
 
     # ----------------------------
     # 🎮 Menu
     # ----------------------------
-    printf "Accept [1-%s], [A]dd 5 Suggestions, Set Prefix [T]ype, Set Prefix [S]cope, Create/Recreate [B]ody%s, Show [C]hanges, Edit [E1-E%s], [M]anual ? " "$total_ai_msg" "$remove_body" "$total_ai_msg" > /dev/tty
+    printf "Accept [1-%s], [A]dd 5 Suggestions, Create/Recreate [B]ody%s, Show [C]hanges, Edit [E1-E%s], [M]anual ? " \
+        "$total_ai_msg" "$remove_body" "$total_ai_msg" > /dev/tty
 
     if ! IFS= read -r choice < /dev/tty; then
         choice="1"
     fi
-
     choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
 
     case "$choice" in
-
-        1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20)
+        [0-9]*)
             if check_choice "$choice" $total_ai_msg; then
-                var="AI_MSG_$choice"
-                COMMIT_MSG=$(build_commit_message "${!var}" "$body_msg")
-                printf "%s" "$COMMIT_MSG" > "$COMMIT_MSG_FILE"
-                echo "✅ AI commit #$choice accepted" > /dev/tty
+                var_name="AI_MSG_$choice"
+                final_msg=$(build_commit_message "${!var_name}" "$body_msg")
+                printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
+                print_tty "✅ AI commit #$choice accepted"
                 exit 0
             else
-                echo "❌ Please choose 1-$total_ai_msg" > /dev/tty
+                print_tty "❌ Please choose 1-$total_ai_msg"
             fi
             ;;
-        e1|e2|e3|e4|e5|e6|e7|e8|e9|e10|e11|e12|e13|e14|e15|e16|e17|e18|e19|e20)
-            choice="${choice//e/}"
-
-            if check_choice "$choice" $total_ai_msg; then
-                var="AI_MSG_$choice"
-                COMMIT_MSG=$(build_commit_message "${!var}" "$body_msg")
-
-                printf "%s" "$COMMIT_MSG" > "$COMMIT_MSG_FILE"
-
+        e[0-9]*)
+            idx="${choice#e}"
+            if check_choice "$idx" $total_ai_msg; then
+                var_name="AI_MSG_$idx"
+                final_msg=$(build_commit_message "${!var_name}" "$body_msg")
+                printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
                 "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty
-
                 exit 0
             else
-                echo "❌ Please choose 1-$total_ai_msg" > /dev/tty
+                print_tty "❌ Please choose 1-$total_ai_msg"
             fi
             ;;
         m)
@@ -398,12 +360,12 @@ while true; do
             ;;
 
         a)
-            echo "🧠 Adding 5 AI commit suggestions..." > /dev/tty
+            print_tty "🧠 Adding 5 AI commit suggestions..."
             regen_ai=1
             continue
             ;;
         b)
-            echo "🧠 Creating body..." > /dev/tty
+            print_tty "🧠 Creating body..."
             regen_ai=2
             continue
             ;;
@@ -413,7 +375,7 @@ while true; do
             ;;
 
         *)
-            echo "❌ Please choose 1-$total_ai_msg, A, E, M, S or R." > /dev/tty
+            print_tty "❌ Please choose 1-$total_ai_msg, A, T, S, B/R, C, E1-E$total_ai_msg, M."
             ;;
     esac
 
