@@ -336,7 +336,7 @@ while true; do
         remove_body=""
     else
         echo "$body_msg$body_time_info" > /dev/tty
-        remove_body=" [R]emove Body"
+        remove_body=", [R]emove Body"
     fi
 
     echo "==============================" > /dev/tty
@@ -344,7 +344,7 @@ while true; do
     # ----------------------------
     # 🎮 Menu
     # ----------------------------
-    printf "Accept [1-%s], [A]dd 5 suggestions, Create/Recreate [B]ody%s, [S]how Changes, Edit [E1-E%s], [M]anual ? " "$total_ai_msg" "$remove_body" "$total_ai_msg" > /dev/tty
+    printf "Accept [1-%s], [A]dd 5 Suggestions, Set Prefix [T]ype, Set Prefix [S]cope, Create/Recreate [B]ody%s, Show [C]hanges, Edit [E1-E%s], [M]anual ? " "$total_ai_msg" "$remove_body" "$total_ai_msg" > /dev/tty
 
     if ! IFS= read -r choice < /dev/tty; then
         choice="1"
@@ -386,7 +386,7 @@ while true; do
             exit 0
             ;;
 
-        s)
+        c)
             git diff --cached
             ;;
 
