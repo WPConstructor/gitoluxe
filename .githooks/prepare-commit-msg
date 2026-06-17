@@ -2,6 +2,59 @@
 
 set -e
 
+REQUIRED_GB=6
+
+# Get RAM (in GB)
+ram_gb=$(free -g | awk '/^Mem:/ {print $7}')
+
+# Get VRAM (best-effort, NVIDIA only)
+vram_gb=0
+if command -v nvidia-smi >/dev/null 2>&1; then
+    vram_gb=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | awk '{sum+=$1} END {print sum/1024}')
+fi
+
+# Fallback if VRAM is empty
+vram_gb=${vram_gb:-0}
+
+ollama_gb=$(ollama ps | awk '
+NR > 1 {
+    size=$3
+    unit=$4
+
+    if (unit == "GB") {
+        sum += size
+    } else if (unit == "MB") {
+        sum += size / 1024
+    }
+}
+END {
+    printf "%.2f", sum + 0
+}')
+
+# Fallback safety
+ollama_gb=${ollama_gb:-0}
+
+# Total available memory estimate (RAM + VRAM + Ollama usage)
+total_gb=$(awk "BEGIN {print $ram_gb + $vram_gb + $ollama_gb}")
+
+if (( $(echo "$total_gb < $REQUIRED_GB" | bc -l) )); then
+    echo "⚠️ Warning: Low memory detected (${total_gb} GB available). Qwen 2.5 7B may run poorly." > /dev/tty
+
+    read -r -p "Continue anyway? (Y/N): " choice < /dev/tty > /dev/tty
+
+    case "$choice" in
+        [Yy]*) echo "Continuing..." > /dev/tty ;;
+        [Nn]*)
+            echo "Exiting..." > /dev/tty
+            exit 1
+            ;;
+        *)
+            echo "Invalid choice. Exiting..." > /dev/tty
+            exit 1
+            ;;
+    esac
+fi
+
 COMMIT_MSG_FILE="$1"
 SOURCE="$2"
 
@@ -35,10 +88,14 @@ fi
 # 📦 Collect staged data
 # ----------------------------
 
-MAX_LINES=500
+MAX_LINES=200
 STAGED_FILES=$(git diff --cached --name-status)
 STAGED_STAT=$(git diff --cached --stat)
-DIFF="$(git diff --cached --unified=1 --no-color | head -n "$MAX_LINES")"
+
+MAX_LINES=200
+MAX_CHARS=7000
+
+DIFF="$(git diff --cached --unified=1 --no-color | head -n "$MAX_LINES" | head -c "$MAX_CHARS")"
 
 # If nothing staged, check if we are amending or overriding a message.
 # This allows the AI to see what is currently in the commit we are modifying.
@@ -46,9 +103,12 @@ if [ -z "$STAGED_FILES" ]; then
     if [ "$SOURCE" = "commit" ] || [ "$SOURCE" = "message" ]; then
         STAGED_FILES=$(git show --name-status --format="" HEAD 2>/dev/null || echo "")
         STAGED_STAT=$(git show --stat --format="" HEAD 2>/dev/null || echo "")
-        DIFF=$(git show --unified=1 --no-color --format="" HEAD 2>/dev/null | head -n "$MAX_LINES" || echo "")
+        DIFF=$(git show --unified=1 --no-color --format="" HEAD 2>/dev/null | head -n "$MAX_LINES" | head -c "$MAX_CHARS" || echo "")
     fi
 fi
+
+DIFF_CHAR_COUNT=${#DIFF}
+[ "$DIFF_CHAR_COUNT" -eq "$MAX_CHARS" ] && DIFF="${DIFF}\n\n... (truncated)"
 
 # If still nothing staged (e.g., a fresh repo with no commits and no staged files)
 [ -z "$STAGED_FILES" ] && exit 0
@@ -73,10 +133,9 @@ PROMPT="Generate exactly one Conventional Commit message.
 Rules:
 - Output one line only, no markdown, explanations, quotes, code fences, or extra text.
 - Format: type(scope): description
-- If multiple distinct changes or features are present, separate them with a comma (e.g., type(scope): desc1, type(scope): desc2).
 - Max 120 chars.
 - Use imperative mood.
-- Describe the primary change, not the implementation details.
+- Describe the primary changes, not the implementation details.
 
 Type selection:
 - feat: new user-visible/runtime behavior or capability.
@@ -200,6 +259,8 @@ check_choice() {
 
 regen_ai=1
 total_ai_msg=0
+gen_time_info=""
+body_time_info=""
 
 # ----------------------------
 # 🎛 UI loop
@@ -209,6 +270,7 @@ while true; do
     # 🤖 Add 5 AI Message Suggestions
     # ----------------------------
     if [ "$regen_ai" = "1" ]; then
+        start_t=$SECONDS
         total_ai_msg=$((total_ai_msg + 5))
         if [ "$total_ai_msg" -gt 20 ]; then
             total_ai_msg=20
@@ -222,6 +284,7 @@ while true; do
         elif [ "$total_ai_msg" -eq 20 ]; then
             generate_batch 16 20
         fi
+        gen_time_info=" (took $((SECONDS - start_t))s)"
         regen_ai=0
     fi
 
@@ -229,6 +292,7 @@ while true; do
     # 🤖 Generate AI body message
     # ----------------------------
     if [ "$regen_ai" = "2" ]; then
+        start_t=$SECONDS
         body_msg=$(generate_body)
         body_msg="$(
         echo "$body_msg" \
@@ -237,6 +301,7 @@ while true; do
         | sed 's/\*\*//g' \
         | sed '/^[[:space:]]*$/d'
         )"
+        body_time_info=" (took $((SECONDS - start_t))s)"
         regen_ai=0
     fi
 
@@ -245,7 +310,7 @@ while true; do
     # ----------------------------
     echo > /dev/tty
     echo "==============================" > /dev/tty
-    echo "🧠 AI Suggested Commits:" > /dev/tty
+    echo "🧠 AI Suggested Commits$gen_time_info ($DIFF_CHAR_COUNT chars):" > /dev/tty
     echo "==============================" > /dev/tty
     i=1
     count=0
@@ -272,7 +337,7 @@ while true; do
         echo "No body" > /dev/tty
         remove_body=""
     else
-        echo "$body_msg" > /dev/tty
+        echo "$body_msg$body_time_info" > /dev/tty
         remove_body=" [R]emove Body"
     fi
 
@@ -304,11 +369,15 @@ while true; do
             ;;
         e1|e2|e3|e4|e5|e6|e7|e8|e9|e10|e11|e12|e13|e14|e15|e16|e17|e18|e19|e20)
             choice="${choice//e/}"
+
             if check_choice "$choice" $total_ai_msg; then
                 var="AI_MSG_$choice"
                 COMMIT_MSG=$(build_commit_message "${!var}" "$body_msg")
+
                 printf "%s" "$COMMIT_MSG" > "$COMMIT_MSG_FILE"
-                "${EDITOR:-nano}" "$COMMIT_MSG_FILE"
+
+                "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty
+
                 exit 0
             else
                 echo "❌ Please choose 1-$total_ai_msg" > /dev/tty
