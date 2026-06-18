@@ -267,7 +267,7 @@ build_commit_message() {
 }
 
 cleanup_ai_msg() {
-    echo "$1" | sed -E 's/[[:space:]]+/ /g; s/`//g' | tr -d '\n\t' | cut -c1-150
+    echo "$1" | tr -d '\n\t' | sed -E 's/[[:space:]]+/ /g; s/`//g' | cut -c1-150
 }
 
 check_choice() {
@@ -415,6 +415,8 @@ gen_time_info=""
 
 # New global variables for scope functionality
 selected_scope=""
+unique_scopes=()
+declare -A scope_map
 
 # ----------------------------
 # 🧠 AI generator functions (continued)
@@ -427,11 +429,11 @@ parse_commit_message() {
     local _scope=""
     local _description="$msg" # Default to full message as description
 
-    if [[ "$msg" =~ ^([^(: ]+)\(([^)]*)\):\s*(.*)$ ]]; then
+    if [[ "$msg" =~ ^([^(:[:space:]]+)\(([^)]*)\):[[:space:]]*(.*)$ ]]; then
         _type="${BASH_REMATCH[1]}"
         _scope="${BASH_REMATCH[2]}"
         _description="${BASH_REMATCH[3]}"
-    elif [[ "$msg" =~ ^([^:]+):\s*(.*)$ ]]; then
+    elif [[ "$msg" =~ ^([^:]+):[[:space:]]*(.*)$ ]]; then
         _type="${BASH_REMATCH[1]}"
         _description="${BASH_REMATCH[2]}"
     fi
@@ -462,6 +464,21 @@ while true; do
         [ "$start_idx" -lt 1 ] && start_idx=1
 
         generate_batch "$start_idx" "$total_ai_msg"
+
+        for i in $(seq "$start_idx" "$total_ai_msg"); do
+            var_name="AI_MSG_$i"
+            msg="${!var_name}"
+            if [ -n "$msg" ]; then
+                readarray -t parsed_parts < <(parse_commit_message "$msg")
+                current_scope="${parsed_parts[1]}"
+
+                if [ -n "$current_scope" ] && [ -z "${scope_map[$current_scope]}" ]; then
+                    unique_scopes+=("$current_scope")
+                    scope_map[$current_scope]=1
+                fi
+            fi
+        done
+
         gen_time_info="$((SECONDS - start_t))s"
         regen_ai=0
     fi
@@ -662,7 +679,14 @@ while true; do
                     var_name="AI_MSG_$i"
                     msg="${!var_name}"
                     if [ -n "$msg" ]; then
-                        updated_msg=$(echo "$msg" | sed -E "s/^[^(: ]+/$selected_type/")
+                        readarray -t parsed_parts < <(parse_commit_message "$msg")
+                        current_scope="${parsed_parts[1]}"
+                        current_description="${parsed_parts[2]}"
+                        if [ -n "$current_scope" ]; then
+                            updated_msg="${selected_type}(${current_scope}): ${current_description}"
+                        else
+                            updated_msg="${selected_type}: ${current_description}"
+                        fi
                         printf -v "AI_MSG_$i" '%s' "$updated_msg"
                     fi
                 done
@@ -671,37 +695,39 @@ while true; do
             continue
             ;;
         s)
-            unique_scopes=()
-            declare -A scope_map # To ensure uniqueness and order
-
-            for i in $(seq 1 "$total_ai_msg"); do
-                var_name="AI_MSG_$i"
-                msg="${!var_name}"
-                if [ -n "$msg" ]; then
-                    readarray -t parsed_parts < <(parse_commit_message "$msg")
-                    current_scope="${parsed_parts[1]}" # This is the scope part
-
-                    if [ -n "$current_scope" ] && [ -z "${scope_map[$current_scope]}" ]; then
-                        unique_scopes+=("$current_scope")
-                        scope_map[$current_scope]=1
-                    fi
-                fi
-            done
-
             new_scope=""
             new_scope_msg=""
 
             while true; do
                 clear
                 print_separator
+                
+                width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
                 print_tty "Select Prefix Scope (Stored: ${selected_scope:-None}):"
+
+                # base width per column (adjust if you want tighter/wider layout)
+                col_width=20
+
+                # calculate how many columns fit
+                cols=$(( width / col_width ))
+                [ "$cols" -lt 1 ] && cols=1
+
                 for i in "${!unique_scopes[@]}"; do
-                    printf "[%2d] %-10s " "$((i+1))" "${unique_scopes[$i]}" > /dev/tty
-                    if [ $(( (i+1) % 3 )) -eq 0 ]; then print_tty ""; fi
+                    printf "[%2d] %-15s" "$((i+1))" "${unique_scopes[$i]}" > /dev/tty
+
+                    # newline when row is full
+                    if [ $(( (i+1) % cols )) -eq 0 ]; then
+                        printf "\n" > /dev/tty
+                    fi
                 done
-                [ $(( ${#unique_scopes[@]} % 3 )) -ne 0 ] && print_tty ""
-                print_tty "[M]anual Input  [Q]uit Menu"
-                print_separator
+
+                # final newline if last row is incomplete
+                if [ $(( ${#unique_scopes[@]} % cols )) -ne 0 ]; then
+                    printf "\n" > /dev/tty
+                fi
+
+                print_tty "Enter Custom Scope [Q]uit Menu"                print_separator
                 print_tty "$new_scope_msg"
                 printf "Choice: " > /dev/tty
                 read -r scope_choice < /dev/tty
