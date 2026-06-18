@@ -244,6 +244,7 @@ print_separator() {
 regen_ai=1
 total_ai_msg=0
 gen_time_info=""
+selected_type=""
 body_time_info=""
 body_msg=""
 
@@ -375,6 +376,60 @@ while true; do
         a)
             print_tty "🧠 Adding 5 AI commit suggestions..."
             regen_ai=1
+            continue
+            ;;
+        t)
+            # Extract unique prefix types from existing AI messages
+            unique_types=$(for i in $(seq 1 "$total_ai_msg"); do
+                var_name="AI_MSG_$i"
+                msg="${!var_name}"
+                [ -n "$msg" ] && echo "$msg" | sed -E 's/^([^(: ]+).*/\1/'
+            done | sort -u)
+
+            if [ -z "$unique_types" ]; then
+                print_tty "❌ No suggestions available to extract types from."
+                continue
+            fi
+
+            print_separator
+            print_tty "Select Prefix Type (Stored: ${selected_type:-None}):"
+            
+            type_list=()
+            while IFS= read -r line; do
+                [ -n "$line" ] && type_list+=("$line")
+            done <<< "$unique_types"
+
+            for i in "${!type_list[@]}"; do
+                print_tty "[$((i+1))] ${type_list[$i]}"
+            done
+            print_tty "[M]anual Input"
+            print_separator
+
+            printf "Choice: " > /dev/tty
+            read -r type_choice < /dev/tty
+            type_choice=$(echo "$type_choice" | tr '[:upper:]' '[:lower:]')
+
+            new_type=""
+            if [[ "$type_choice" =~ ^[0-9]+$ ]] && [ "$type_choice" -ge 1 ] && [ "$type_choice" -le "${#type_list[@]}" ]; then
+                new_type="${type_list[$((type_choice-1))]}"
+            elif [ "$type_choice" = "m" ]; then
+                printf "Enter manual prefix type: " > /dev/tty
+                read -r new_type < /dev/tty
+                new_type=$(echo "$new_type" | tr -d '[:space:]')
+            fi
+
+            if [ -n "$new_type" ]; then
+                selected_type="$new_type"
+                for i in $(seq 1 "$total_ai_msg"); do
+                    var_name="AI_MSG_$i"
+                    msg="${!var_name}"
+                    if [ -n "$msg" ]; then
+                        updated_msg=$(echo "$msg" | sed -E "s/^[^(: ]+/$selected_type/")
+                        printf -v "AI_MSG_$i" '%s' "$updated_msg"
+                    fi
+                done
+                print_tty "✅ All suggestions updated to type: $selected_type"
+            fi
             continue
             ;;
         b)
