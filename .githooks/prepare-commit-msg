@@ -560,7 +560,7 @@ while true; do
 
     echo "" > /dev/tty
     if [ -n "$new_msg" ]; then
-        print_tty "$new_msg"
+        print_tty "$new_msg\n"
         new_msg=""
     fi
 
