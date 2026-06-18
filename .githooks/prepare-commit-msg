@@ -97,7 +97,7 @@ existing_msg=$(cat "$COMMIT_MSG_FILE" 2>/dev/null)
 # 🚫 Check if "gitai" message
 # ----------------------------
 case "$existing_msg" in
-    "gitoluxe"|"gtl"|"ai")
+    "gitoluxe"|"ai")
         ;;
     *)
         exit 0
@@ -301,6 +301,47 @@ print_separator() {
     printf "%s\n" "$line" > /dev/tty
 }
 
+get_type_desc() {
+    choice="$1"
+
+    types=("feat" "fix" "refactor" "style" "docs" "test" "perf" "chore" "release" "remove" "build" "ci" "security" "i18n" "deps" "hotfix" "ui" "merge" "revert" "move" "cleanup")
+
+    descs=(
+        "A new feature for the user."
+        "A bug fix for the user."
+        "A code restructuring without behavior change."
+        "Formatting, whitespace, etc; no code change."
+        "Documentation only changes."
+        "Adding missing tests or correcting existing tests."
+        "A code change that improves performance."
+        "Maintenance, build process or auxiliary tools."
+        "Release of a new version."
+        "Removing dead code or files."
+        "Build system or external dependencies changes."
+        "CI configuration files and scripts changes."
+        "Fixing a security vulnerability."
+        "Internationalization and localization changes."
+        "Dependency updates or changes."
+        "Urgent bug fix for production."
+        "User interface or styling changes."
+        "Merging branches."
+        "Reverting a previous commit."
+        "Moving or renaming files or directories."
+        "General code cleanup and small improvements."
+    )
+
+    i=0
+    while [ $i -lt ${#types[@]} ]; do
+        if [ "${types[$i]}" = "$choice" ]; then
+            printf "%s\n" "${descs[$i]}"
+            return 0
+        fi
+        i=$((i + 1))
+    done
+
+    return 1
+}
+
 print_menu() {
     local width cols i items count col_width
 
@@ -310,6 +351,7 @@ print_menu() {
         " [1-$total_ai_msg] Accept"
         " [A] Add Suggestions"
         " [T] Prefix Type"
+        " Enter Type for Type description"
         " [S] Prefix Scope"
         " [B] Add Body"
         " [R] Remove Body"
@@ -483,6 +525,11 @@ while true; do
         choice="1"
     fi
     choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
+
+    if desc=$(get_type_desc "$choice"); then
+        new_msg="$desc"
+        continue
+    fi
 
     case "$choice" in
         x)
