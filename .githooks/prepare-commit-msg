@@ -412,6 +412,33 @@ EOF
 regen_ai=1
 total_ai_msg=0
 gen_time_info=""
+
+# New global variables for scope functionality
+selected_scope=""
+
+# ----------------------------
+# 🧠 AI generator functions (continued)
+# ----------------------------
+
+# Function to parse commit message into type, scope, and description
+parse_commit_message() {
+    local msg="$1"
+    local _type=""
+    local _scope=""
+    local _description="$msg" # Default to full message as description
+
+    if [[ "$msg" =~ ^([^(: ]+)\(([^)]*)\):\s*(.*)$ ]]; then
+        _type="${BASH_REMATCH[1]}"
+        _scope="${BASH_REMATCH[2]}"
+        _description="${BASH_REMATCH[3]}"
+    elif [[ "$msg" =~ ^([^:]+):\s*(.*)$ ]]; then
+        _type="${BASH_REMATCH[1]}"
+        _description="${BASH_REMATCH[2]}"
+    fi
+    echo "$_type"
+    echo "$_scope"
+    echo "$_description"
+}
 selected_type=""
 body_time_info=""
 body_msg=""
@@ -589,31 +616,11 @@ while true; do
             ;;
         t)
             types=("feat" "fix" "refactor" "style" "docs" "test" "perf" "chore" "release" "remove" "build" "ci" "security" "i18n" "deps" "hotfix" "ui" "merge" "revert" "move" "cleanup")
-            descs=(
-                "A new feature for the user."
-                "A bug fix for the user."
-                "A code restructuring without behavior change."
-                "Formatting, white-space, etc; no code change."
-                "Documentation only changes."
-                "Adding missing tests or correcting existing tests."
-                "A code change that improves performance."
-                "Maintenance, build process or auxiliary tools."
-                "Release of a new version."
-                "Removing dead code or files."
-                "Build system or external dependencies changes."
-                "CI configuration files and scripts changes."
-                "Fixing a security vulnerability."
-                "Internationalization and localization changes."
-                "Dependency updates or changes."
-                "Urgent bug fix for production."
-                "User interface or styling changes."
-                "Merging branches."
-                "Reverting a previous commit."
-                "Moving or renaming files or directories."
-                "General code cleanup and small improvements."
-            )
             new_type=""
+            new_type_msg=""
+
             while true; do
+                clear
                 print_separator
                 print_tty "Select Prefix Type (Stored: ${selected_type:-None}):"
                 for i in "${!types[@]}"; do
@@ -621,21 +628,22 @@ while true; do
                     if [ $(( (i+1) % 3 )) -eq 0 ]; then print_tty ""; fi
                 done
                 [ $(( ${#types[@]} % 3 )) -ne 0 ] && print_tty ""
-                print_tty "[M]anual Input, [H]elp, [Q]uit Menu"
+                print_tty "[M]anual Input  [Q]uit Menu"
+                print_tty "Enter the type for a description of the type"
                 print_separator
+                print_tty new_type_msg
                 printf "Choice: " > /dev/tty
                 read -r type_choice < /dev/tty
                 type_choice=$(echo "$type_choice" | tr '[:upper:]' '[:lower:]')
+                
+                if desc=$(get_type_desc "$type_choice"); then
+                    new_type_msg="$type_choice\n\n$desc\n"
+                    continue
+                fi
 
                 if [[ "$type_choice" =~ ^[0-9]+$ ]] && [ "$type_choice" -ge 1 ] && [ "$type_choice" -le "${#types[@]}" ]; then
                     new_type="${types[$((type_choice-1))]}"
                     break
-                elif [ "$type_choice" = "h" ]; then
-                    print_separator
-                    print_tty "Type Descriptions:"
-                    for i in "${!types[@]}"; do
-                        printf "%-10s : %s\n" "${types[$i]}" "${descs[$i]}" > /dev/tty
-                    done
                 elif [ "$type_choice" = "m" ]; then
                     printf "Enter manual prefix type: " > /dev/tty
                     read -r new_type < /dev/tty
@@ -644,7 +652,7 @@ while true; do
                 elif [ "$type_choice" = "q" ] || [ -z "$type_choice" ]; then
                     break
                 else
-                    print_tty "❌ Invalid choice."
+                    new_type_msg="❌ Invalid choice."
                 fi
             done
 
@@ -659,6 +667,82 @@ while true; do
                     fi
                 done
                 new_msg="✅ All suggestions updated to type: $selected_type"
+            fi
+            continue
+            ;;
+        s)
+            unique_scopes=()
+            declare -A scope_map # To ensure uniqueness and order
+
+            for i in $(seq 1 "$total_ai_msg"); do
+                var_name="AI_MSG_$i"
+                msg="${!var_name}"
+                if [ -n "$msg" ]; then
+                    readarray -t parsed_parts < <(parse_commit_message "$msg")
+                    current_scope="${parsed_parts[1]}" # This is the scope part
+
+                    if [ -n "$current_scope" ] && [ -z "${scope_map[$current_scope]}" ]; then
+                        unique_scopes+=("$current_scope")
+                        scope_map[$current_scope]=1
+                    fi
+                fi
+            done
+
+            new_scope=""
+            new_scope_msg=""
+
+            while true; do
+                clear
+                print_separator
+                print_tty "Select Prefix Scope (Stored: ${selected_scope:-None}):"
+                for i in "${!unique_scopes[@]}"; do
+                    printf "[%2d] %-10s " "$((i+1))" "${unique_scopes[$i]}" > /dev/tty
+                    if [ $(( (i+1) % 3 )) -eq 0 ]; then print_tty ""; fi
+                done
+                [ $(( ${#unique_scopes[@]} % 3 )) -ne 0 ] && print_tty ""
+                print_tty "[M]anual Input  [Q]uit Menu"
+                print_separator
+                print_tty "$new_scope_msg"
+                printf "Choice: " > /dev/tty
+                read -r scope_choice < /dev/tty
+                scope_choice=$(echo "$scope_choice" | tr '[:upper:]' '[:lower:]')
+                
+                if [[ "$scope_choice" =~ ^[0-9]+$ ]] && [ "$scope_choice" -ge 1 ] && [ "$scope_choice" -le "${#unique_scopes[@]}" ]; then
+                    new_scope="${unique_scopes[$((scope_choice-1))]}"
+                    break
+                elif [ "$scope_choice" = "m" ]; then
+                    printf "Enter manual prefix scope: " > /dev/tty
+                    read -r manual_input_scope < /dev/tty
+                    manual_input_scope=$(echo "$manual_input_scope" | tr -d '[:space:]')
+                    if [ -n "$manual_input_scope" ]; then
+                        new_scope="$manual_input_scope"
+                        break
+                    else
+                        new_scope_msg="❌ Manual scope cannot be empty."
+                    fi
+                elif [ "$scope_choice" = "q" ] || [ -z "$scope_choice" ]; then
+                    break # Quit without applying changes
+                else
+                    # User entered a string that is not a number or 'm'/'q'. Treat as manual input.
+                    new_scope="$scope_choice"
+                    break
+                fi
+            done
+
+            if [ -n "$new_scope" ]; then
+                selected_scope="$new_scope" # Store the selected scope for display
+                for i in $(seq 1 "$total_ai_msg"); do
+                    var_name="AI_MSG_$i"
+                    msg="${!var_name}"
+                    if [ -n "$msg" ]; then
+                        readarray -t parsed_parts < <(parse_commit_message "$msg")
+                        current_type="${parsed_parts[0]}"
+                        current_description="${parsed_parts[2]}"
+                        updated_msg="${current_type}(${selected_scope}): ${current_description}"
+                        printf -v "AI_MSG_$i" '%s' "$updated_msg"
+                    fi
+                done
+                new_msg="✅ All suggestions updated to scope: $selected_scope"
             fi
             continue
             ;;
