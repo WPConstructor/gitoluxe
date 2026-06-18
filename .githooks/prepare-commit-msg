@@ -307,27 +307,27 @@ get_type_desc() {
     types=("feat" "fix" "refactor" "style" "docs" "test" "perf" "chore" "release" "remove" "build" "ci" "security" "i18n" "deps" "hotfix" "ui" "merge" "revert" "move" "cleanup")
 
     descs=(
-        "A new feature for the user."
-        "A bug fix for the user."
-        "A code restructuring without behavior change."
-        "Formatting, whitespace, etc; no code change."
-        "Documentation only changes."
-        "Adding missing tests or correcting existing tests."
-        "A code change that improves performance."
-        "Maintenance, build process or auxiliary tools."
-        "Release of a new version."
-        "Removing dead code or files."
-        "Build system or external dependencies changes."
-        "CI configuration files and scripts changes."
-        "Fixing a security vulnerability."
-        "Internationalization and localization changes."
-        "Dependency updates or changes."
-        "Urgent bug fix for production."
-        "User interface or styling changes."
-        "Merging branches."
-        "Reverting a previous commit."
-        "Moving or renaming files or directories."
-        "General code cleanup and small improvements."
+        "Introduces a new user-facing feature or capability. This includes adding new functionality that changes or extends behavior. Only use when actual new behavior is delivered to the user."
+        "Fixes a bug or incorrect behavior in the system. Resolves an issue where the software does not work as intended. Does not introduce new features."
+        "Restructures code without changing external behavior. Used for improving internal design, readability, or maintainability. No functional changes should result."
+        "Changes related to code style, formatting, or whitespace only. Does not affect logic or behavior. Typically used for linting or formatting adjustments."
+        "Updates documentation files only, such as README or inline docs. No production or test code is modified. Used to clarify or improve project documentation."
+        "Adds new tests or updates existing tests. Ensures correctness of functionality without changing production behavior. May include test fixes or coverage improvements."
+        "Improves performance without changing observable behavior. Focuses on optimizing speed, memory usage, or efficiency. No functional changes are introduced."
+        "General maintenance tasks, tooling updates, or minor internal changes. Includes non-feature work that supports development workflows. Does not affect user-facing behavior."
+        "Prepares or performs a new software release. Includes versioning, tagging, or release-related adjustments. No functional changes should be introduced in this commit."
+        "Removes dead code, unused files, or obsolete functionality. Ensures cleanup of no-longer-needed components. Must not break existing behavior."
+        "Changes related to build system, packaging, or external build dependencies. Includes configuration for bundlers or build tools. Does not change runtime logic directly."
+        "Updates continuous integration or deployment configurations. Affects CI pipelines, workflows, or automation scripts. No application logic changes are intended."
+        "Fixes or mitigates a security vulnerability. Addresses issues that could lead to unauthorized access or exploitation. Should be treated as high priority changes."
+        "Adds or updates internationalization or localization support. Includes translations or locale-specific formatting changes. Does not change core functionality."
+        "Updates external dependencies or libraries. Includes version bumps, removals, or replacements. May include compatibility adjustments."
+        "Fixes a critical or urgent issue affecting production systems. Used when immediate correction is required. Often a fast-tracked version of a bug fix."
+        "Changes related to user interface or visual presentation. Includes styling, layout, or UX adjustments. Does not modify core business logic."
+        "Combines branches or integrates separate lines of development. Used for merge commits only. Does not introduce new feature logic."
+        "Reverts a previous commit or set of changes. Restores prior state of the codebase. Used when a change needs to be undone."
+        "Moves or renames files or directories without changing content. Helps reorganize project structure. No functional changes are introduced."
+        "General cleanup of codebase and minor improvements. Includes small refactors, simplifications, or removals. Does not affect behavior."
     )
 
     i=0
@@ -527,7 +527,7 @@ while true; do
     choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
 
     if desc=$(get_type_desc "$choice"); then
-        new_msg="$desc"
+        new_msg="$choice\n\n$desc\n"
         continue
     fi
 
