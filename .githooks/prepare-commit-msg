@@ -6,14 +6,35 @@ REQUIRED_GB=6
 MAX_CHARS=7000
 COMMIT_MSG_FILE="$1"
 SOURCE="$2"
+DEBUG=1
 
 # ----------------------------
 # 🛠️ Utilities
 # ----------------------------
 
 print_tty() {
-    echo -e "$@" > /dev/tty
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+    echo -e "$@" | fold -s -w "$width" > /dev/tty
 }
+
+print_tty_indent_5() {
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    printf "%s\n" "$@" \
+        | fold -s -w "$width" \
+        | sed '2,$s/^/     /' \
+        > /dev/tty
+}
+
+print_tty_indent_1() {
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    printf "%s\n" "$@" \
+        | fold -s -w "$width" \
+        | sed '2,$s/^/ /' \
+        > /dev/tty
+}
+
 
 # ----------------------------
 # ⚙️ System Checks
@@ -60,9 +81,6 @@ check_resources() {
 
 check_resources
 
-# ----------------------------
-# 🚫 Check if "ai" message
-# ----------------------------
 case "$SOURCE" in
     merge|squash|template)
         echo "Skipping AI commit generation ($SOURCE)"
@@ -75,8 +93,11 @@ esac
 
 existing_msg=$(cat "$COMMIT_MSG_FILE" 2>/dev/null)
 
+# ----------------------------
+# 🚫 Check if "gitai" message
+# ----------------------------
 case "$existing_msg" in
-    "ai")
+    "gitoluxe"|"gtl"|"ai")
         ;;
     *)
         exit 0
@@ -141,34 +162,54 @@ SUMMARIZED DIFF:
     s|^([+-])[[:space:]]*/\*|\1 COMMENT:|;
 ')
 
-SUBJECT_PROMPT="Generate exactly one Conventional Commit message.
+SUBJECT_PROMPT="Generate exactly one Conventional Commit message from the provided diff.
 
-Rules:
-- Output one line only, no markdown, explanations, quotes, code fences, or extra text.
-- Format: type(scope): description
-- Max 120 chars.
-- Use imperative mood.
-- Describe the primary changes, not the implementation details.
+Requirements:
 
-Type selection:
-- feat: new user-visible/runtime behavior or capability.
-- fix: bug fix.
-- refactor: code restructuring without behavior change.
-- docs: documentation/Markdown-only changes.
-- test: tests only.
-- perf: performance improvement.
-- build: build/dependency changes.
-- ci: CI/CD changes.
-- chore: maintenance/tooling/cleanup.
+* Output exactly one line.
+* Do not output markdown, explanations, quotes, code fences, or any additional text.
+* Format: type(scope): description
+* Omit the scope if it is not obvious.
+* Maximum length: 120 characters.
+* Use imperative mood (e.g. "add", "fix", "update", "remove").
+* Describe the primary outcome or purpose of the change, not implementation details.
 
-Important:
-- Markdown files are documentation unless accompanying a code change.
-- Comments provide intent and context but do not make a change a feat.
-- New functions, renames, moves, cleanup, comments, labels, docs, and formatting are not features by themselves.
-- If unsure between feat and refactor, choose refactor.
-- If any new user-visible functionality exists, choose feat.
+Type selection (choose the most significant change):
 
-Scope (if obvious):
+* feat: new user-visible functionality or behavior.
+* fix: correction of incorrect behavior.
+* refactor: internal restructuring without behavior change.
+* style: formatting, whitespace, linting, or code style only.
+* docs: documentation-only changes.
+* test: tests only.
+* perf: performance improvements.
+* chore: maintenance, tooling, configuration, or housekeeping.
+* release: version release changes.
+* remove: removal of functionality, code, or files.
+* build: build system or dependency management changes.
+* ci: CI/CD changes.
+* security: security-related fixes or improvements.
+* i18n: internationalization or localization changes.
+* deps: dependency updates.
+* hotfix: urgent production fix.
+* ui: user interface or visual changes.
+* merge: branch merge.
+* revert: revert of previous changes.
+* move: file or directory moves/renames.
+* cleanup: minor cleanup and non-functional improvements.
+
+Classification rules:
+
+* Classify based on behavior, not code volume.
+* New functions, refactoring, renaming, moving files, comments, formatting, labels, and cleanup are not feats by themselves.
+* Documentation changes are docs unless accompanied by a more significant code change.
+* Comments provide context but do not affect the type.
+* If behavior does not change, prefer refactor over feat.
+* If any user-visible functionality is added, prefer feat.
+* If any incorrect behavior is corrected, prefer fix.
+* Choose the single best type; do not combine types.
+
+Available scopes (use only if clearly applicable):
 githooks, ai, ollama, commit, cli, installer
 
 Return only the commit message."
@@ -239,6 +280,7 @@ generate_batch() {
     local start=$1
     local end=$2
     local idx=$start
+    echo "Generating commit message suggestions..." > /dev/tty
     while [ "$idx" -le "$end" ]; do
         msg=$(generate_subject)
         msg=$(cleanup_ai_msg "$msg")
@@ -248,9 +290,81 @@ generate_batch() {
 }
 
 print_separator() {
-    local width
-    width=$(tput cols 2>/dev/null || echo 80)
-    printf '%*s\n' "$width" '' | tr ' ' '='
+    local width char line
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+    char="-"
+
+    printf -v line '%*s' "$width" ''
+    line=${line// /$char}
+
+    printf "%s\n" "$line" > /dev/tty
+}
+
+print_menu() {
+    local width cols i items count col_width
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    items=(
+        " [1-$total_ai_msg] Accept"
+        " [A] Add Suggestions"
+        " [T] Prefix Type"
+        " [S] Prefix Scope"
+        " [B] Add Body"
+        " [R] Remove Body"
+        " [C] Changes"
+        " [E1-E$total_ai_msg] Edit Suggestion"
+        " [M] Edit Manually"
+        " [X] Exit"
+    )
+
+    count=${#items[@]}
+
+    # compute best column count (at least 1 column)
+    col_width=24
+    cols=$(( width / col_width ))
+    [ "$cols" -lt 1 ] && cols=1
+
+    echo "" > /dev/tty
+
+    for ((i=0; i<count; i++)); do
+        printf "%-${col_width}s" "${items[i]}"
+
+        # line break after reaching column limit
+        if (( (i + 1) % cols == 0 )); then
+            printf "\n"
+        fi
+    done
+} > /dev/tty
+
+title() {
+    local width line trimmed pad
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    while IFS= read -r line; do
+        # skip empty lines
+        [ -z "$line" ] && continue
+
+        # truncate line to terminal width
+        trimmed="${line:0:width}"
+
+        # compute padding for centering
+        pad=$(( (width - ${#trimmed}) / 2 ))
+        [ "$pad" -lt 0 ] && pad=0
+
+        # print centered line to tty
+        printf "%*s%s\n" "$pad" "" "$trimmed" > /dev/tty
+    done << 'EOF'
+  ________.__  __         .__                       
+ /  _____/|__|/  |_  ____ |  |  __ _____  ___ ____  
+/   \  ___|  \   __\/  _ \|  | |  |  \  \/  // __ \ 
+\    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
+ \______  /__||__|  \____/|____/____//__/\_ \\___  >
+        \/                                 \/    \/ 
+V1.0.0
+EOF
 }
 
 regen_ai=1
@@ -259,11 +373,15 @@ gen_time_info=""
 selected_type=""
 body_time_info=""
 body_msg=""
+new_msg=""
 
 # ----------------------------
 # 🎛 UI loop
 # ----------------------------
 while true; do
+
+    clear
+
     # ----------------------------
     # 🤖 Add 5 AI Message Suggestions
     # ----------------------------
@@ -275,7 +393,7 @@ while true; do
         [ "$start_idx" -lt 1 ] && start_idx=1
 
         generate_batch "$start_idx" "$total_ai_msg"
-        gen_time_info=" (took $((SECONDS - start_t))s)"
+        gen_time_info="$((SECONDS - start_t))s"
         regen_ai=0
     fi
 
@@ -284,6 +402,7 @@ while true; do
     # ----------------------------
     if [ "$regen_ai" = "2" ]; then
         start_t=$SECONDS
+        echo "Generating commit body message..." > /dev/tty
         body_msg=$(generate_body)
         body_msg="$(
         echo "$body_msg" \
@@ -292,21 +411,33 @@ while true; do
         | sed 's/\*\*//g' \
         | sed '/^[[:space:]]*$/d'
         )"
-        body_time_info=" (took $((SECONDS - start_t))s)"
+        body_time_info=" ($((SECONDS - start_t))s)"
         regen_ai=0
     fi
 
+    title
+    
     # ----------------------------
-    # 🧠 Show suggestions
+    # 🎮 Menu
     # ----------------------------
-    print_separator
-    LAST_COMMIT_SUBJECT=$(git log -1 --pretty=%s)
-    if [ $is_amend -eq 1 ]; then
-        print_tty  print_tty "The current message is:$LAST_COMMIT_SUBJECT"
-    fi
 
-    print_tty "🧠 AI Suggested Commits$gen_time_info ($diff_len chars):"
     print_separator
+    print_menu
+
+    # ----------------------------
+    # 🧠 Display suggestions
+    # ----------------------------
+
+    echo "" > /dev/tty 
+    print_separator
+    debug_str=""
+
+    if [ "${DEBUG:-0}" -eq 1 ]; then
+        debug_str=" ($gen_time_info / $diff_len chars)"
+    fi
+    echo "" > /dev/tty
+    print_tty " AI Generated Commits$debug_str:"
+    echo "" > /dev/tty
 
     idx=1
     display_count=0
@@ -315,8 +446,11 @@ while true; do
         msg="${!var_name}"
 
         if [ -n "$msg" ]; then
-            print_tty "[$idx] $msg"
+            print_tty_indent_5 " [$idx] $msg"
             display_count=$((display_count + 1))
+            print_tty ""
+
+            # Empty line after 5 items
             if [ $((display_count % 5)) -eq 0 ]; then
                 print_tty ""
             fi
@@ -325,36 +459,46 @@ while true; do
     done
 
     if [ -z "$body_msg" ]; then
-        print_tty "No body"
-        remove_body=""
+        print_tty " No body"
     else
-        print_tty "$body_msg$body_time_info"
-        remove_body=", [R]emove Body"
+        print_separator
+        print_tty " Body:"
+        print_tty_indent_1 " $body_msg$body_time_info"
     fi
-    
-    # ----------------------------
-    # 🎮 Menu
-    # ----------------------------
+
     print_separator
-    printf "Accept [1-%s], [A]dd 5 Suggestions, Set Prefix [T]ype, Set Prefix [S]cope, [Create/Recreate [B]ody%s, Show [C]hanges, Edit [E1-E%s], [M]anual ? " \
-        "$total_ai_msg" "$remove_body" "$total_ai_msg" > /dev/tty
 
+    # ----------------------------
+    # Choice
+    # ----------------------------
 
+    echo "" > /dev/tty
+    if [ -n "$new_msg" ]; then
+        print_tty "$new_msg"
+        new_msg=""
+    fi
+
+    printf "Choice: " > /dev/tty
     if ! IFS= read -r choice < /dev/tty; then
         choice="1"
     fi
     choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
 
     case "$choice" in
+        x)
+            print_tty "Commit canceled"
+            exit 1
+            ;;
+
         [0-9]*)
             if check_choice "$choice" $total_ai_msg; then
                 var_name="AI_MSG_$choice"
                 final_msg=$(build_commit_message "${!var_name}" "$body_msg")
                 printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
-                print_tty "✅ AI commit #$choice accepted"
+                new_msg="✅ AI commit #$choice accepted"
                 exit 0
             else
-                print_tty "❌ Please choose 1-$total_ai_msg"
+                new_msg="❌ Please choose 1-$total_ai_msg"
             fi
             ;;
         e[0-9]*)
@@ -369,10 +513,11 @@ while true; do
                 "${EDITOR:-nano}" "$COMMIT_MSG_FILE"
                 exit 0
             else
-                print_tty "❌ Please choose 1-$total_ai_msg"
+                new_msg="❌ Please choose 1-$total_ai_msg"
             fi
             ;;
         m)
+            > "$COMMIT_MSG_FILE"
             exec < /dev/tty
             exec > /dev/tty
             exec 2> /dev/tty            
@@ -391,7 +536,7 @@ while true; do
             ;;
 
         a)
-            print_tty "🧠 Adding 5 AI commit suggestions..."
+            new_msg="🧠 Adding 5 AI commit suggestions..."
             regen_ai=1
             continue
             ;;
@@ -466,7 +611,7 @@ while true; do
                         printf -v "AI_MSG_$i" '%s' "$updated_msg"
                     fi
                 done
-                print_tty "✅ All suggestions updated to type: $selected_type"
+                new_msg="✅ All suggestions updated to type: $selected_type"
             fi
             continue
             ;;
