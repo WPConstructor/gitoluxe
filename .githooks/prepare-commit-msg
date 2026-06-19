@@ -1,22 +1,28 @@
 #!/bin/bash
 
-set -e
+# ============================
+# Configuration
+# ============================
 
 REQUIRED_GB=6
 MAX_CHARS=7000
-COMMIT_MSG_FILE="$1"
-SOURCE="$2"
-DEBUG=1
+SHOW_PERFORMANCE_INFO=1
+
+# ============================
+# Functions
+# ============================
 
 # ----------------------------
-# 🛠️ Utilities
+# 🛠️ Output Utilities
 # ----------------------------
 
+# Prints a message to the TTY, wrapped to the terminal width.
 print_tty() {
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
     echo -e "$@" | fold -s -w "$width" > /dev/tty
 }
 
+# Prints a message to the TTY, wrapped and with a 5-space indent on subsequent lines.
 print_tty_indent_5() {
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
@@ -26,6 +32,7 @@ print_tty_indent_5() {
         > /dev/tty
 }
 
+# Prints a message to the TTY, wrapped and with a 1-space indent on subsequent lines.
 print_tty_indent_1() {
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
@@ -35,11 +42,103 @@ print_tty_indent_1() {
         > /dev/tty
 }
 
+# Displays a horizontal line separator spanning the terminal width.
+print_seperator() {
+    local width char line
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+    char="-"
+
+    printf -v line '%*s' "$width" ''
+    line=${line// /$char}
+
+    printf "%s\n" "$line" > /dev/tty
+}
+
+# Displays the ASCII art title.
+print_title() {
+    local width line trimmed pad
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    while IFS= read -r line; do
+        # skip empty lines
+        [ -z "$line" ] && continue
+
+        # truncate line to terminal width
+        trimmed="${line:0:width}"
+
+        # compute padding for centering
+        pad=$(( (width - ${#trimmed}) / 2 ))
+        [ "$pad" -lt 0 ] && pad=0
+
+        # print centered line to tty
+        printf "%*s%s\n" "$pad" "" "$trimmed" > /dev/tty
+    done << 'EOF'
+  ________.__  __         .__                       
+ /  _____/|__|/  |_  ____ |  |  __ _____  ___ ____  
+/   \  ___|  \   __\/  _ \|  | |  |  \  \/  // __ \ 
+\    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
+ \______  /__||__|  \____/|____/____//__/\_ \\___  >
+        \/                                 \/    \/ 
+V1.0.0
+EOF
+}
+
+# prints a text in the middle of the window
+print_center() {
+    local text="$1"
+    local width cols padding
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    # strip ANSI escape codes (optional safety)
+    cols=${#text}
+
+    padding=$(( (width - cols) / 2 ))
+    [ "$padding" -lt 0 ] && padding=0
+
+    printf "%*s%s\n" "$padding" "" "$text" > /dev/tty
+}
+
+# ----------------------------
+# String Utilities
+# ----------------------------
+
+# Cleans up AI-generated messages by removing newlines, tabs, backticks, and extra spaces.
+cleanup_ai_msg() {
+    echo "$1" | tr -d '\n\t' | sed -E 's/[[:space:]]+/ /g; s/`//g' | cut -c1-150
+}
+
+# Checks if a given choice is a valid number within a given range.
+check_choice() {
+    local choice="$1"
+    local max="$2"
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$max" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Constructs the final commit message from a subject and an optional body.
+build_commit_message() {
+    local subject="$1"
+    local body_msg="$2"
+
+    if [ -z "$body_msg" ]; then
+        printf "%s\n" "$subject"
+    else
+        printf "%s\n\n%s\n" "$subject" "$body_msg"
+    fi
+}
+
 
 # ----------------------------
 # ⚙️ System Checks
 # ----------------------------
 
+# Checks for available system RAM and VRAM and warns the user if it's low.
 check_resources() {
     local free_ram_gb=$(free -g | awk '/^Mem:/ {print $7}')
     local free_vram_gb=0
@@ -81,9 +180,16 @@ check_resources() {
 
 check_resources
 
+# ----------------------------
+# 🚫 Check if "ai" message
+# ----------------------------
+
+COMMIT_MSG_FILE="$1"
+SOURCE="$2"
+
 case "$SOURCE" in
     merge|squash|template)
-        echo "Skipping AI commit generation ($SOURCE)"
+        print_tty "Skipping AI commit generation ($SOURCE)"
         exit 0
         ;;
     commit|amend)
@@ -93,19 +199,11 @@ esac
 
 existing_msg=$(cat "$COMMIT_MSG_FILE" 2>/dev/null)
 
-# ----------------------------
-# 🚫 Check if "gitai" message
-# ----------------------------
 case "$existing_msg" in
-    "gitoluxe"|"ai")
+    "ai")
         ;;
     *)
         exit 0
-        # Allow amend commits to proceed even if the file isn't empty. Todo uncomment when this should be used. Test if
-        # it runs without this.
-        #if [ "$SOURCE" != "commit" ]; then
-        #    exit 0
-        #fi
         ;;
 esac
 
@@ -114,9 +212,9 @@ if [ ! -e /dev/tty ]; then
     exit 0
 fi
 
-# ----------------------------
-# 📦 Collect staged data
-# ----------------------------
+# ---------------------------------
+# 📦 Collect data needed for prompt
+# ---------------------------------
 
 staged_files=$(git diff --cached --name-status)
 staged_stat=$(git diff --cached --stat)
@@ -165,49 +263,50 @@ SUMMARIZED DIFF:
 SUBJECT_PROMPT="Generate exactly one Conventional Commit message from the provided diff.
 
 Requirements:
-
-* Output exactly one line.
-* Do not output markdown, explanations, quotes, code fences, or any additional text.
-* Format: type(scope): description
-* Omit the scope if it is not obvious.
-* Maximum length: 120 characters.
-* Use imperative mood (e.g. "add", "fix", "update", "remove").
-* Describe the primary outcome or purpose of the change, not implementation details.
+- Output exactly one line.
+- Do not output markdown, explanations, quotes, code fences, or any additional text.
+- Format: type(scope): description
+- Omit the scope if it is not obvious.
+- Maximum length: 120 characters.
+- Use imperative mood (e.g. \"add\", \"fix\", \"update\", \"remove\").
+- Describe the primary outcome or purpose of the change, not implementation details.
+- Be specific about what changed: include the affected behavior, component, or condition when possible.
+- Avoid vague wording such as \"improve\", \"update\", or \"fix issue\" without context.
 
 Type selection (choose the most significant change):
-
-* feat: new user-visible functionality or behavior.
-* fix: correction of incorrect behavior.
-* refactor: internal restructuring without behavior change.
-* style: formatting, whitespace, linting, or code style only.
-* docs: documentation-only changes.
-* test: tests only.
-* perf: performance improvements.
-* chore: maintenance, tooling, configuration, or housekeeping.
-* release: version release changes.
-* remove: removal of functionality, code, or files.
-* build: build system or dependency management changes.
-* ci: CI/CD changes.
-* security: security-related fixes or improvements.
-* i18n: internationalization or localization changes.
-* deps: dependency updates.
-* hotfix: urgent production fix.
-* ui: user interface or visual changes.
-* merge: branch merge.
-* revert: revert of previous changes.
-* move: file or directory moves/renames.
-* cleanup: minor cleanup and non-functional improvements.
+- feat: new user-visible functionality or behavior.
+- fix: correction of incorrect behavior.
+- refactor: internal restructuring without behavior change.
+- style: formatting, whitespace, linting, or code style only.
+- docs: documentation-only changes.
+- test: tests only.
+- perf: performance improvements.
+- chore: maintenance, tooling, configuration, or housekeeping.
+- release: version release changes.
+- remove: removal of functionality, code, or files.
+- build: build system or dependency management changes.
+- ci: CI/CD changes.
+- security: security-related fixes or improvements.
+- i18n: internationalization or localization changes.
+- deps: dependency updates.
+- hotfix: urgent production fix.
+- ui: user interface or visual changes.
+- merge: branch merge.
+- revert: revert of previous changes.
+- move: file or directory moves/renames.
+- cleanup: minor cleanup and non-functional improvements.
 
 Classification rules:
-
-* Classify based on behavior, not code volume.
-* New functions, refactoring, renaming, moving files, comments, formatting, labels, and cleanup are not feats by themselves.
-* Documentation changes are docs unless accompanied by a more significant code change.
-* Comments provide context but do not affect the type.
-* If behavior does not change, prefer refactor over feat.
-* If any user-visible functionality is added, prefer feat.
-* If any incorrect behavior is corrected, prefer fix.
-* Choose the single best type; do not combine types.
+- Classify based on behavior, not code volume.
+- Base the message strictly on observable changes in the diff.
+- New functions, refactoring, renaming, moving files, comments, formatting, labels, and cleanup are not feats by themselves.
+- Documentation changes are docs unless accompanied by a more significant code change.
+- Comments provide context but do not affect the type.
+- If behavior does not change, prefer refactor over feat.
+- If any user-visible functionality is added, prefer feat.
+- If any incorrect behavior is corrected, prefer fix.
+- For "fix", explicitly describe what was wrong and what changed.
+- Choose the single best type; do not combine types.
 
 Available scopes (use only if clearly applicable):
 githooks, ai, ollama, commit, cli, installer
@@ -247,35 +346,17 @@ Supports regenerating or editing suggestions."
 # 🧠 AI generator functions
 # ----------------------------
 
+# Generates the commit message body using Ollama.
 generate_body() {
     printf "%s" "$diff_payload" | ollama run qwen2.5-coder:7b "$BODY_PROMPT"
 }
 
+# Generates the commit message subject using Ollama.
 generate_subject() {
     printf "%s" "$diff_payload" | ollama run qwen2.5-coder:7b "$SUBJECT_PROMPT"
 }
 
-build_commit_message() {
-    local subject="$1"
-    local body_msg="$2"
-
-    if [ -z "$body_msg" ]; then
-        printf "%s\n" "$subject"
-    else
-        printf "%s\n\n%s\n" "$subject" "$body_msg"
-    fi
-}
-
-cleanup_ai_msg() {
-    echo "$1" | tr -d '\n\t' | sed -E 's/[[:space:]]+/ /g; s/`//g' | cut -c1-150
-}
-
-check_choice() {
-    local choice="$1"
-    local max="$2"
-    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$max" ]
-}
-
+# Generates a batch of commit message suggestions.
 generate_batch() {
     local start=$1
     local end=$2
@@ -289,18 +370,7 @@ generate_batch() {
     done
 }
 
-print_separator() {
-    local width char line
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-    char="-"
-
-    printf -v line '%*s' "$width" ''
-    line=${line// /$char}
-
-    printf "%s\n" "$line" > /dev/tty
-}
-
+# Gets the description for a given conventional commit type.
 get_type_desc() {
     choice="$1"
 
@@ -342,6 +412,7 @@ get_type_desc() {
     return 1
 }
 
+# Displays the interactive menu options.
 print_menu() {
     local width cols i items count col_width
 
@@ -378,35 +449,6 @@ print_menu() {
             printf "\n"
         fi
     done
-} > /dev/tty
-
-title() {
-    local width line trimmed pad
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    while IFS= read -r line; do
-        # skip empty lines
-        [ -z "$line" ] && continue
-
-        # truncate line to terminal width
-        trimmed="${line:0:width}"
-
-        # compute padding for centering
-        pad=$(( (width - ${#trimmed}) / 2 ))
-        [ "$pad" -lt 0 ] && pad=0
-
-        # print centered line to tty
-        printf "%*s%s\n" "$pad" "" "$trimmed" > /dev/tty
-    done << 'EOF'
-  ________.__  __         .__                       
- /  _____/|__|/  |_  ____ |  |  __ _____  ___ ____  
-/   \  ___|  \   __\/  _ \|  | |  |  \  \/  // __ \ 
-\    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
- \______  /__||__|  \____/|____/____//__/\_ \\___  >
-        \/                                 \/    \/ 
-V1.0.0
-EOF
 }
 
 regen_ai=1
@@ -417,10 +459,6 @@ gen_time_info=""
 selected_scope=""
 unique_scopes=()
 declare -A scope_map
-
-# ----------------------------
-# 🧠 AI generator functions (continued)
-# ----------------------------
 
 # Function to parse commit message into type, scope, and description
 parse_commit_message() {
@@ -446,16 +484,18 @@ body_time_info=""
 body_msg=""
 new_msg=""
 
-# ----------------------------
-# 🎛 UI loop
-# ----------------------------
+# ----------------------------------
+# 🧠 Step 1/4 Select Subject Message 
+# ----------------------------------
 while true; do
+
+    break
 
     clear
 
-    # ----------------------------
+    # -------------------------------
     # 🤖 Add 5 AI Message Suggestions
-    # ----------------------------
+    # -------------------------------
     if [ "$regen_ai" = "1" ]; then
         start_t=$SECONDS
         total_ai_msg=$((total_ai_msg + 5))
@@ -483,31 +523,13 @@ while true; do
         regen_ai=0
     fi
 
-    # ----------------------------
-    # 🤖 Generate AI body message
-    # ----------------------------
-    if [ "$regen_ai" = "2" ]; then
-        start_t=$SECONDS
-        echo "Generating commit body message..." > /dev/tty
-        body_msg=$(generate_body)
-        body_msg="$(
-        echo "$body_msg" \
-        | sed 's/```.*//g' \
-        | sed 's/`//g' \
-        | sed 's/\*\*//g' \
-        | sed '/^[[:space:]]*$/d'
-        )"
-        body_time_info=" ($((SECONDS - start_t))s)"
-        regen_ai=0
-    fi
-
-    title
+    print_title
     
     # ----------------------------
     # 🎮 Menu
     # ----------------------------
 
-    print_separator
+    print_seperator
     print_menu
 
     # ----------------------------
@@ -515,10 +537,10 @@ while true; do
     # ----------------------------
 
     echo "" > /dev/tty 
-    print_separator
+    print_seperator
     debug_str=""
 
-    if [ "${DEBUG:-0}" -eq 1 ]; then
+    if [ "${SHOW_PERFORMANCE_INFO:-0}" -eq 1 ]; then
         debug_str=" ($gen_time_info / $diff_len chars)"
     fi
     echo "" > /dev/tty
@@ -547,12 +569,12 @@ while true; do
     if [ -z "$body_msg" ]; then
         print_tty " No body"
     else
-        print_separator
+        print_seperator
         print_tty " Body:"
         print_tty_indent_1 " $body_msg$body_time_info"
     fi
 
-    print_separator
+    print_seperator
 
     # ----------------------------
     # Choice
@@ -638,7 +660,7 @@ while true; do
 
             while true; do
                 clear
-                print_separator
+                print_seperator
                 print_tty "Select Prefix Type (Stored: ${selected_type:-None}):"
                 for i in "${!types[@]}"; do
                     printf "[%2d] %-10s " "$((i+1))" "${types[$i]}" > /dev/tty
@@ -647,7 +669,7 @@ while true; do
                 [ $(( ${#types[@]} % 3 )) -ne 0 ] && print_tty ""
                 print_tty "[M]anual Input  [Q]uit Menu"
                 print_tty "Enter the type for a description of the type"
-                print_separator
+                print_seperator
                 print_tty new_type_msg
                 printf "Choice: " > /dev/tty
                 read -r type_choice < /dev/tty
@@ -700,7 +722,7 @@ while true; do
 
             while true; do
                 clear
-                print_separator
+                print_seperator
                 
                 width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
@@ -727,7 +749,9 @@ while true; do
                     printf "\n" > /dev/tty
                 fi
 
-                print_tty "Enter Custom Scope [Q]uit Menu"                print_separator
+                print_tty "Enter Custom Scope [Q]uit Menu"
+                display_separator
+                print_tty new_scope_msg
                 print_tty "$new_scope_msg"
                 printf "Choice: " > /dev/tty
                 read -r scope_choice < /dev/tty
@@ -788,5 +812,122 @@ while true; do
     esac
 
 done
+
+# ============================
+# Step 2/4 Add body
+# ============================
+
+# ----------------------------
+# Data
+# ----------------------------
+
+menu_items=(
+    "[B] Back"
+    "[A] Add Body"
+    "[E] Edit Body"
+    "[R] Remove Body"
+    "[N] Next"
+    "[H] Help"
+)
+
+# ----------------------------
+# Helper functions
+# ----------------------------
+
+print_step2_menu() {
+    local width col_width cols i item max_len=0
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    # find longest item
+    for item in "${menu_items[@]}"; do
+        len=${#item}
+        [ "$len" -gt "$max_len" ] && max_len=$len
+    done
+
+    col_width=$((max_len + 4))
+    cols=$(( width / col_width ))
+    [ "$cols" -lt 1 ] && cols=1
+
+    for i in "${!menu_items[@]}"; do
+        # leading space added here
+        printf " %-*s" "$col_width" "${menu_items[$i]}" > /dev/tty
+
+        if [ $(( (i+1) % cols )) -eq 0 ]; then
+            printf "\n" > /dev/tty
+        fi
+    done
+
+    # final newline if incomplete row
+    if [ $(( ${#menu_items[@]} % cols )) -ne 0 ]; then
+        printf "\n" > /dev/tty
+    fi
+}
+
+# ----------------------------
+# UI Loop
+# ----------------------------
+
+run_body_menu(){
+    new_body_msg=""
+
+    while true; do
+
+        clear
+
+        print_title
+        print_seperator
+        print_center "Step 2/4 Body Message"
+        print_seperator
+        print_center "Subject Text: Changed input to output"
+        print_center "Body: None"
+        print_seperator
+        print_step2_menu
+        print_seperator
+        if [ -n "$new_body_msg" ]; then
+            print_tty_indent_1 "$new_body_msg"
+            print_seperator
+            new_body_msg=""
+        fi
+
+        printf " ? " > /dev/tty
+        if ! IFS= read -r choice < /dev/tty; then
+            choice="1"
+        fi
+        choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
+        case "$choice" in
+            h)
+                new_body_msg=" Add body if multiple changes or subject is unclear.
+
+    The commit body adds extra context when the subject line isn’t enough. It explains why a change was made, not just what changed. Use it for complex or multi-part changes. Keep it short and clear."
+                continue
+            ;;
+            n)
+                exit 1
+            ;;
+        esac
+    done
+}
+
+run_body_menu
+exit 1
+    # ----------------------------
+    # 🤖 Generate AI body message
+    # ----------------------------
+    if [ "$regen_ai" = "2" ]; then
+        start_t=$SECONDS
+        echo "Generating commit body message..." > /dev/tty
+        body_msg=$(generate_body)
+        body_msg="$(
+        echo "$body_msg" \
+        | sed 's/```.*//g' \
+        | sed 's/`//g' \
+        | sed 's/\*\*//g' \
+        | sed '/^[[:space:]]*$/d'
+        )"
+        body_time_info=" ($((SECONDS - start_t))s)"
+        regen_ai=0
+    fi
+
 
 exit 0;
