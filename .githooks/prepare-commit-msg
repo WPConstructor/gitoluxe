@@ -1,114 +1,31 @@
 #!/bin/bash
 
 # ============================
-# Configuration
+# Main Configuration
 # ============================
 
+# Minimum required memory in GB for running AI generation
 REQUIRED_GB=6
+
+# Maximum number of characters allowed in a commit message prompt/input
 MAX_CHARS=7000
+
+# Enable performance/debug output (1 = on, 0 = off)
 SHOW_PERFORMANCE_INFO=1
+
+# Maximum number of AI-generated commit message suggestions stored
+MAX_AI_MSGS=20
+
+# Number of new AI suggestions generated per batch
+MSGS_ADD=5
 
 # ============================
 # Functions
 # ============================
 
 # ----------------------------
-# 🛠️ Output Utilities
-# ----------------------------
-
-# Prints a message to the TTY, wrapped to the terminal width.
-print_tty() {
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-    echo -e "$@" | fold -s -w "$width" > /dev/tty
-}
-
-# Prints a message to the TTY, wrapped and with a 5-space indent on subsequent lines.
-print_tty_indent_5() {
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    printf "%s\n" "$@" \
-        | fold -s -w "$width" \
-        | sed '2,$s/^/     /' \
-        > /dev/tty
-}
-
-# Prints a message to the TTY, wrapped and with a 1-space indent on subsequent lines.
-print_tty_indent_1() {
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    printf "%s\n" "$@" \
-        | fold -s -w "$width" \
-        | sed '2,$s/^/ /' \
-        > /dev/tty
-}
-
-# Displays a horizontal line separator spanning the terminal width.
-print_seperator() {
-    local width char line
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-    char="-"
-
-    printf -v line '%*s' "$width" ''
-    line=${line// /$char}
-
-    printf "%s\n" "$line" > /dev/tty
-}
-
-# Displays the ASCII art title.
-print_title() {
-    local width line trimmed pad
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    while IFS= read -r line; do
-        # skip empty lines
-        [ -z "$line" ] && continue
-
-        # truncate line to terminal width
-        trimmed="${line:0:width}"
-
-        # compute padding for centering
-        pad=$(( (width - ${#trimmed}) / 2 ))
-        [ "$pad" -lt 0 ] && pad=0
-
-        # print centered line to tty
-        printf "%*s%s\n" "$pad" "" "$trimmed" > /dev/tty
-    done << 'EOF'
-  ________.__  __         .__                       
- /  _____/|__|/  |_  ____ |  |  __ _____  ___ ____  
-/   \  ___|  \   __\/  _ \|  | |  |  \  \/  // __ \ 
-\    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
- \______  /__||__|  \____/|____/____//__/\_ \\___  >
-        \/                                 \/    \/ 
-V1.0.0
-EOF
-}
-
-# prints a text in the middle of the window
-print_center() {
-    local text="$1"
-    local width cols padding
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    # strip ANSI escape codes (optional safety)
-    cols=${#text}
-
-    padding=$(( (width - cols) / 2 ))
-    [ "$padding" -lt 0 ] && padding=0
-
-    printf "%*s%s\n" "$padding" "" "$text" > /dev/tty
-}
-
-# ----------------------------
 # String Utilities
 # ----------------------------
-
-# Cleans up AI-generated messages by removing newlines, tabs, backticks, and extra spaces.
-cleanup_ai_msg() {
-    echo "$1" | tr -d '\n\t' | sed -E 's/[[:space:]]+/ /g; s/`//g' | cut -c1-150
-}
 
 # Checks if a given choice is a valid number within a given range.
 check_choice() {
@@ -351,25 +268,6 @@ generate_body() {
     printf "%s" "$diff_payload" | ollama run qwen2.5-coder:7b "$BODY_PROMPT"
 }
 
-# Generates the commit message subject using Ollama.
-generate_subject() {
-    printf "%s" "$diff_payload" | ollama run qwen2.5-coder:7b "$SUBJECT_PROMPT"
-}
-
-# Generates a batch of commit message suggestions.
-generate_batch() {
-    local start=$1
-    local end=$2
-    local idx=$start
-    echo "Generating commit message suggestions..." > /dev/tty
-    while [ "$idx" -le "$end" ]; do
-        msg=$(generate_subject)
-        msg=$(cleanup_ai_msg "$msg")
-        printf -v "AI_MSG_$idx" '%s' "$msg"
-        idx=$((idx + 1))
-    done
-}
-
 # Gets the description for a given conventional commit type.
 get_type_desc() {
     choice="$1"
@@ -413,7 +311,7 @@ get_type_desc() {
 }
 
 # Displays the interactive menu options.
-print_menu() {
+do_menu() {
     local width cols i items count col_width
 
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
@@ -493,36 +391,6 @@ while true; do
 
     clear
 
-    # -------------------------------
-    # 🤖 Add 5 AI Message Suggestions
-    # -------------------------------
-    if [ "$regen_ai" = "1" ]; then
-        start_t=$SECONDS
-        total_ai_msg=$((total_ai_msg + 5))
-        [ "$total_ai_msg" -gt 20 ] && total_ai_msg=20
-        start_idx=$((total_ai_msg - 4))
-        [ "$start_idx" -lt 1 ] && start_idx=1
-
-        generate_batch "$start_idx" "$total_ai_msg"
-
-        for i in $(seq "$start_idx" "$total_ai_msg"); do
-            var_name="AI_MSG_$i"
-            msg="${!var_name}"
-            if [ -n "$msg" ]; then
-                readarray -t parsed_parts < <(parse_commit_message "$msg")
-                current_scope="${parsed_parts[1]}"
-
-                if [ -n "$current_scope" ] && [ -z "${scope_map[$current_scope]}" ]; then
-                    unique_scopes+=("$current_scope")
-                    scope_map[$current_scope]=1
-                fi
-            fi
-        done
-
-        gen_time_info="$((SECONDS - start_t))s"
-        regen_ai=0
-    fi
-
     print_title
     
     # ----------------------------
@@ -530,7 +398,7 @@ while true; do
     # ----------------------------
 
     print_seperator
-    print_menu
+    do_menu
 
     # ----------------------------
     # 🧠 Display suggestions
@@ -539,42 +407,6 @@ while true; do
     echo "" > /dev/tty 
     print_seperator
     debug_str=""
-
-    if [ "${SHOW_PERFORMANCE_INFO:-0}" -eq 1 ]; then
-        debug_str=" ($gen_time_info / $diff_len chars)"
-    fi
-    echo "" > /dev/tty
-    print_tty " AI Generated Commits$debug_str:"
-    echo "" > /dev/tty
-
-    idx=1
-    display_count=0
-    while [ "$idx" -le 20 ]; do
-        var_name="AI_MSG_$idx"  
-        msg="${!var_name}"
-
-        if [ -n "$msg" ]; then
-            print_tty_indent_5 " [$idx] $msg"
-            display_count=$((display_count + 1))
-            print_tty ""
-
-            # Empty line after 5 items
-            if [ $((display_count % 5)) -eq 0 ]; then
-                print_tty ""
-            fi
-        fi
-        idx=$((idx + 1))
-    done
-
-    if [ -z "$body_msg" ]; then
-        print_tty " No body"
-    else
-        print_seperator
-        print_tty " Body:"
-        print_tty_indent_1 " $body_msg$body_time_info"
-    fi
-
-    print_seperator
 
     # ----------------------------
     # Choice
@@ -814,58 +646,414 @@ while true; do
 done
 
 # ============================
-# Step 2/4 Add body
+# Common Functions 
 # ============================
 
 # ----------------------------
-# Data
+# Display (print) Functions
 # ----------------------------
 
-menu_items=(
-    "[B] Back"
-    "[A] Add Body"
-    "[E] Edit Body"
-    "[R] Remove Body"
-    "[N] Next"
-    "[H] Help"
-)
-
-# ----------------------------
-# Helper functions
-# ----------------------------
-
-print_step2_menu() {
-    local width col_width cols i item max_len=0
+# Displays the ASCII art title.
+print_title() {
+    local width line trimmed pad
 
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
-    # find longest item
+    while IFS= read -r line; do
+        # skip empty lines
+        [ -z "$line" ] && continue
+
+        # truncate line to terminal width
+        trimmed="${line:0:width}"
+
+        # compute padding for centering
+        pad=$(( (width - ${#trimmed}) / 2 ))
+        [ "$pad" -lt 0 ] && pad=0
+
+        # print centered line to tty
+        printf "%*s%s\n" "$pad" "" "$trimmed" > /dev/tty
+    done << 'EOF'
+  ________.__  __         .__                       
+ /  _____/|__|/  |_  ____ |  |  __ _____  ___ ____  
+/   \  ___|  \   __\/  _ \|  | |  |  \  \/  // __ \ 
+\    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
+ \______  /__||__|  \____/|____/____//__/\_ \\___  >
+        \/                                 \/    \/ 
+V1.0.0
+EOF
+}
+
+# prints a text in the middle of the window
+print_center() {
+    local text="$1"
+    local width cols padding
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    # strip ANSI escape codes (optional safety)
+    cols=${#text}
+
+    padding=$(( (width - cols) / 2 ))
+    [ "$padding" -lt 0 ] && padding=0
+
+    printf "%*s%s\n" "$padding" "" "$text" > /dev/tty
+}
+
+# Prints a message to the TTY, wrapped to the terminal width.
+print_tty() {
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+    echo -e "$@" | fold -s -w "$width" > /dev/tty
+}
+
+# Prints a message to the TTY, wrapped and with a 1-space indent on subsequent lines.
+print_tty_indent_1() {
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    printf "%s\n" "$@" \
+        | fold -s -w "$width" \
+        | sed '2,$s/^/ /' \
+        > /dev/tty
+}
+
+# Prints a message to the TTY, wrapped and with a 5-space indent on subsequent lines.
+print_tty_indent_5() {
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    printf "%s\n" "$@" \
+        | fold -s -w "$width" \
+        | sed '2,$s/^/     /' \
+        > /dev/tty
+}
+
+# Displays a horizontal line separator spanning the terminal width.
+print_seperator() {
+    local width char inner line
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+    char="-"
+
+    # leave 1 space left + 1 space right
+    inner=$((width - 2))
+    [ "$inner" -lt 1 ] && inner=1
+
+    printf -v line '%*s' "$inner" ''
+    line=${line// /$char}
+
+    printf " %s \n" "$line" > /dev/tty
+}
+
+# ----------------------------
+# Menu Functions
+# ----------------------------
+
+# Print a centered, responsive multi-column menu in the terminal
+print_menu() {
+    local width cols i j item len pad line cell
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    # find max columns based on typical width
+    cols=$(( width / 20 ))
+    [ "$cols" -lt 1 ] && cols=1
+
+    # find max per column
+    declare -a col_max
+
+    for ((i=0; i<cols; i++)); do
+        col_max[i]=0
+    done
+
+    for i in "${!menu_items[@]}"; do
+        col=$(( i % cols ))
+        len=${#menu_items[i]}
+        [ "$len" -gt "${col_max[col]}" ] && col_max[col]=$len
+    done
+
+    # compute total width
+    local row_width=0
+    for ((i=0; i<cols; i++)); do
+        row_width=$(( row_width + col_max[i] + 2 ))
+    done
+
+    pad=$(( (width - row_width) / 2 + 1))
+    [ "$pad" -lt 0 ] && pad=0
+
+    i=0
+    while [ $i -lt ${#menu_items[@]} ]; do
+        line=""
+
+        for ((j=0; j<cols; j++)); do
+            if [ $((i + j)) -lt ${#menu_items[@]} ]; then
+                printf -v cell "%-*s" "${col_max[j]}" "${menu_items[i+j]}"
+            else
+                printf -v cell "%-*s" "${col_max[j]}" ""
+            fi
+
+            line+="$cell  "
+        done
+
+        printf "%*s%s\n" "$pad" "" "$line" > /dev/tty
+
+        i=$((i + cols))
+    done
+}
+
+print_menu_bak() {
+    local width col_width cols i j item max_len=0 len line cell pad block_width filled
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    # Find longest item
     for item in "${menu_items[@]}"; do
         len=${#item}
         [ "$len" -gt "$max_len" ] && max_len=$len
     done
 
-    col_width=$((max_len + 4))
-    cols=$(( width / col_width ))
+    cols=$(( width / (max_len + 4) ))
     [ "$cols" -lt 1 ] && cols=1
 
-    for i in "${!menu_items[@]}"; do
-        # leading space added here
-        printf " %-*s" "$col_width" "${menu_items[$i]}" > /dev/tty
+    col_width=$(( max_len + 4 ))
 
-        if [ $(( (i+1) % cols )) -eq 0 ]; then
-            printf "\n" > /dev/tty
+    # real used block width (NOT full terminal stretch)
+    block_width=$(( cols * col_width ))
+
+    pad=$(( (width - block_width) / 2 ))
+    [ "$pad" -lt 0 ] && pad=0
+
+    i=0
+    while [ $i -lt ${#menu_items[@]} ]; do
+        line=""
+        filled=0
+
+        for ((j=0; j<cols && i+j<${#menu_items[@]}; j++)); do
+            printf -v cell " %-*s" $((col_width - 1)) "${menu_items[i+j]}"
+            line+="$cell"
+            filled=$((filled + 1))
+        done
+
+        # IMPORTANT:
+        # DO NOT pad last row to full grid width
+        # Only keep real content width
+
+        line=$(printf "%s" "$line" | sed 's/[[:space:]]*$//')
+
+        printf "%*s%s\n" "$pad" "" "$line" > /dev/tty
+
+        i=$((i + cols))
+    done
+}
+
+# ============================
+# Select Message (Step 1)
+# ============================
+
+# ----------------------------
+# AI Functions (Step 1)
+# ----------------------------
+
+# Cleans up AI-generated messages by removing newlines, tabs, backticks, and extra spaces.
+cleanup_ai_msg() {
+    echo "$1" | tr -d '\n\t' | sed -E 's/[[:space:]]+/ /g; s/`//g' | cut -c1-150
+}
+
+# Generates the commit message subject using Ollama.
+generate_subject() {
+    printf "%s" "$diff_payload" | ollama run qwen2.5-coder:7b "$SUBJECT_PROMPT"
+}
+
+# Generates a batch of commit message suggestions.
+generate_batch() {
+    local start=$1
+    local end=$2
+    local idx=$start
+    echo "Generating commit message suggestions..." > /dev/tty
+    while [ "$idx" -le "$end" ]; do
+        msg=$(generate_subject)
+        msg=$(cleanup_ai_msg "$msg")
+        # Assign Dynamic Value
+        printf -v "AI_MSG_$idx" '%s' "$msg"
+        idx=$((idx + 1))
+    done
+}
+
+# Add AI-generated commit message suggestions batch
+add_message_suggestions(){
+    start_t=$SECONDS
+    total_ai_msg=$((total_ai_msg + 5))
+    [ "$total_ai_msg" -gt $MAX_AI_MSGS ] && total_ai_msg=MAX_AI_MSGS
+    start_idx=$((total_ai_msg - MSGS_ADD -1))
+    [ "$start_idx" -lt 1 ] && start_idx=1
+
+    generate_batch "$start_idx" "$total_ai_msg"
+
+    for i in $(seq "$start_idx" "$total_ai_msg"); do
+        var_name="AI_MSG_$i"
+        msg="${!var_name}"
+        if [ -n "$msg" ]; then
+            readarray -t parsed_parts < <(parse_commit_message "$msg")
+            current_scope="${parsed_parts[1]}"
+
+            if [ -n "$current_scope" ] && [ -z "${scope_map[$current_scope]}" ]; then
+                unique_scopes+=("$current_scope")
+                scope_map[$current_scope]=1
+            fi
         fi
     done
 
-    # final newline if incomplete row
-    if [ $(( ${#menu_items[@]} % cols )) -ne 0 ]; then
-        printf "\n" > /dev/tty
-    fi
+    gen_time_info="$((SECONDS - start_t))s"
+    regen_ai=0
 }
 
 # ----------------------------
-# UI Loop
+# Display Functions (Step 1)
+# ----------------------------
+
+print_messages(){
+    local idx display_count msg var_name next_found tmp j
+
+    if [ "${SHOW_PERFORMANCE_INFO:-0}" -eq 1 ]; then
+        debug_str=" ($gen_time_info / $diff_len chars)"
+    fi
+
+    idx=1
+    display_count=0
+
+    while [ "$idx" -le "$MAX_AI_MSGS" ]; do
+        var_name="AI_MSG_$idx"
+        msg="${!var_name}"
+
+        if [ -n "$msg" ]; then
+
+            # group spacing (before group except first)
+            if [ $((display_count % MSGS_ADD)) -eq 0 ] && [ "$display_count" -ne 0 ]; then
+                print_tty ""
+            fi
+
+            msg="${msg#*: }"
+
+            print_tty_indent_5 " [$idx] $msg"
+
+            display_count=$((display_count + 1))
+
+            # check if another message exists AFTER this one (SAFE VERSION)
+            next_found=0
+            j=$((idx + 1))
+
+            while [ "$j" -le "$MAX_AI_MSGS" ]; do
+                tmp="AI_MSG_$j"
+                if [ -n "${!tmp}" ]; then
+                    next_found=1
+                    break
+                fi
+                j=$((j + 1))
+            done
+
+            if [ "$next_found" -eq 1 ]; then
+                print_tty ""
+            fi
+        fi
+
+        idx=$((idx + 1))
+    done
+}
+
+print_messages_bak(){
+    local idx display_count msg var_name
+
+    if [ "${SHOW_PERFORMANCE_INFO:-0}" -eq 1 ]; then
+        debug_str=" ($gen_time_info / $diff_len chars)"
+    fi
+
+    idx=1
+    display_count=0
+
+    while [ "$idx" -le "$MAX_AI_MSGS" ]; do
+        var_name="AI_MSG_$idx"
+        msg="${!var_name}"
+
+        if [ -n "$msg" ]; then
+
+            # NEW: add empty line BEFORE each new group (except first)
+            if [ $((display_count % MSGS_ADD)) -eq 0 ] && [ "$display_count" -ne 0 ]; then
+                print_tty ""
+            fi
+
+            print_tty_indent_5 " [$idx] $msg"
+            display_count=$((display_count + 1))
+
+            print_tty ""
+
+        fi
+
+        idx=$((idx + 1))
+    done
+}
+
+# ----------------------------
+# Menu Loop (Step 1)
+# ----------------------------
+
+clear
+add_message_suggestions
+
+run_message_menu(){
+    local new_message_msg=""
+
+    while true; do
+
+        clear
+
+        print_title
+        print_seperator
+        print_center "Step 1/4 : Select Message"
+        print_seperator
+        print_messages
+        print_seperator
+        menu_items=(
+            "[1-5] Choose Suggestion"
+            "[A] Add Suggestions"
+            "[C] Show Changes"
+            "[M] Manual Message"
+            "[X] Exit without commiting"
+        )
+
+        print_menu
+        print_seperator
+        if [ -n "$new_message_msg" ]; then
+            print_tty_indent_1 "$new_message_msg"
+            print_seperator
+            new_message_msg=""
+        fi
+
+        printf " ? " > /dev/tty
+        if ! IFS= read -r choice < /dev/tty; then
+            choice="1"
+        fi
+        choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
+        case "$choice" in
+            h)
+                new_body_msg=" Add body if multiple changes or subject is unclear.
+
+    The commit body adds extra context when the subject line isn’t enough. It explains why a change was made, not just what changed. Use it for complex or multi-part changes. Keep it short and clear."
+                continue
+            ;;
+            n)
+                exit 1
+            ;;
+        esac
+    done
+
+}
+
+run_message_menu
+
+
+# ============================
+# Step 2/4 Add Body
+# ============================
+
+# ----------------------------
+# Menu Loop
 # ----------------------------
 
 run_body_menu(){
@@ -882,7 +1070,15 @@ run_body_menu(){
         print_center "Subject Text: Changed input to output"
         print_center "Body: None"
         print_seperator
-        print_step2_menu
+        menu_items=(
+            "[B] Back"
+            "[A] Add Body"
+            "[E] Edit Body"
+            "[R] Remove Body"
+            "[N] Next"
+            "[H] Help"
+        )
+        print_menu
         print_seperator
         if [ -n "$new_body_msg" ]; then
             print_tty_indent_1 "$new_body_msg"
@@ -911,6 +1107,7 @@ run_body_menu(){
 
 run_body_menu
 exit 1
+#test
     # ----------------------------
     # 🤖 Generate AI body message
     # ----------------------------
