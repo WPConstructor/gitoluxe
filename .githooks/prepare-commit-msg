@@ -59,7 +59,7 @@ print_title() {
 \    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
  \______  /__||__|  \____/|____/____//__/\_ \\___  >
         \/                                 \/    \/ 
-V1.0.0 (c) 2026 by WPConstructor - License MIT
+v1.0.0 (c) 2026 by WPConstructor - License MIT
 EOF
 }
 
@@ -865,10 +865,10 @@ generate_subject() {
     "properties":{
       "type":{"type":"string"},
       "scope":{"type":"string"},
-      "description":{"type":"string"}
-      "create_body":{"type":"bool"}
+      "description":{"type":"string"},
+      "create_body":{"type":"boolean"}
     },
-    "required":["type","description"],
+    "required":["type","description","create_body"],
     "additionalProperties":false
   }' \
   qwen-commit \
@@ -947,7 +947,11 @@ generate_batch() {
         #press_continue
         msg=$(printf '%s' "$json_msg" | jq -r '.description')
         create_body=$(printf '%s' "$json_msg" | jq -r '.create_body')
-        echo create_body;
+        if [ "$create_body" = "true" ]; then
+            echo "Create body"
+        else
+            echo "No body needed"
+        fi
         press_continue
         #printf '%s\n' "$msg"
         msg=$(cleanup_ai_msg "$msg")
