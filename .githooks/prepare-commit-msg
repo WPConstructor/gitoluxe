@@ -849,7 +849,7 @@ while true; do
 done
 
 # ============================
-# Select Message (Step 1)
+# Main Menu
 # ============================
 
 # ----------------------------
@@ -1003,7 +1003,7 @@ check_choice() {
 }
 
 # ----------------------------
-# Menu Loop (Step 1)
+# Main Menu Loop
 # ----------------------------
 
 clear
@@ -1023,7 +1023,7 @@ run_message_menu(){
             debug_str="Generation took $gen_time_info of $diff_len characters"
         fi
 
-        print_center "Select Message"
+        print_center "Main Menu"
         if [ "$debug_str" != "" ]; then
             print_center "$debug_str"
         fi
@@ -1048,7 +1048,7 @@ run_message_menu(){
 
         if [ "$new_msg" != "" ]; then
             print_center "$new_msg"
-            $new_msg=""
+            new_msg=""
         fi
 
         printf " ? " > /dev/tty
