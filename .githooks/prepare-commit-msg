@@ -17,7 +17,7 @@ SHOW_PERFORMANCE_INFO=1
 MAX_AI_MSGS=20
 
 # Number of new AI suggestions generated per batch
-MSGS_ADD=5
+MSGS_ADD=1
 
 # ============================
 # Common Functions 
@@ -26,6 +26,12 @@ MSGS_ADD=5
 # ----------------------------
 # Display (print) Functions
 # ----------------------------
+
+press_continue(){
+    printf "\nPress any key to continue..." > /dev/tty
+    IFS= read -r -n1 < /dev/tty
+    printf "\n" > /dev/tty
+}
 
 # Displays the ASCII art title.
 print_title() {
@@ -339,10 +345,10 @@ SUMMARIZED DIFF:
 SUBJECT_PROMPT="Generate one concise commit subject from the provided diff.
 
 Requirements:
-- Output exactly one line.
 - Do not output markdown, explanations, quotes, code fences, or any additional text.
-- Format: type(scope): description.
-- Maximum length: 75 characters.
+- Type Format: type(scope).
+- Description: description text.
+- Maximum length of description: 75 characters.
 - Use imperative mood (e.g. \"add\", \"fix\", \"update\", \"remove\").
 - Describe only the main purpose of the change.
 - Select the most significant change in the diff.
@@ -388,22 +394,23 @@ Scope rules:
 - Do not use generic scopes like \"misc\", \"general\", or \"code\".
 
 Examples:
-fix(auth): handle expired session tokens
-feat(api): add user profile endpoint
-refactor(parser): simplify markdown processing
-docs(readme): clarify installation steps
+type: fix | scope : (auth) | description : handle expired session tokens
+type: feat | scope : (api) | description : add user profile endpoint
+type: refactor | scope: (parser) | description : simplify markdown processing
+type: docs | scope : (readme) | description : clarify installation steps
 
-OUTPUT FORMAT:
-Return plain text only.
-Do NOT return JSON.
-Do NOT use braces {}, keys, arrays, or quotes.
 
 Example valid output:
 fix(cli): handle missing config file
 
-OUTPUT FORMAT:Plain text only. One line. No JSON.
-Return only the commit subject.
-Maximum length: 75 characters."
+OUTPUT FORMAT:
+- Do NOT use braces {}, keys, arrays, or quotes.
+- Return only valid JSON!
+- Do not output ANSI escape sequences!
+- Do not use colors, formatting, cursor movement, or terminal control codes!
+- Don't use newlines and tabs in the output!
+
+Maximum length of description: 75 characters."
 
 BODY_PROMPT="Generate only the Git commit body.
 
@@ -828,9 +835,14 @@ done
 # AI Functions (Step 1)
 # ----------------------------
 
+json_escape() {
+    jq -Rn --arg str "$1" '$str'
+}
+
 # Cleans up AI-generated messages by removing newlines, tabs, backticks, and extra spaces.
 cleanup_ai_msg() {
-    echo "$1" \
+    printf "%s" "$1" \
+    | strip_ansi \
     | sed -E 's/\x1B\[[0-9;]*[mKHFJ]//g' \
     | tr -d '\n\t' \
     | sed -E 's/[[:space:]]+/ /g; s/`//g' \
@@ -839,7 +851,73 @@ cleanup_ai_msg() {
 
 # Generates the commit message subject using Ollama.
 generate_subject() {
-    printf "%s" "$diff_payload" | ollama run qwen2.5-coder:7b "$SUBJECT_PROMPT"
+    clean_diff_payload=$(printf '%s' "$diff_payload" \
+    | sed $'s/\x1B\\[[0-9;?]*[ -\\/]*[@-~]//g' \
+    | tr -d '\000-\010\013\014\016-\037')
+    printf "%s" "$diff_payload" | ollama run \
+  --format '{
+    "type":"object",
+    "properties":{
+      "type":{"type":"string"},
+      "scope":{"type":"string"},
+      "description":{"type":"string"}
+    },
+    "required":["type","description"],
+    "additionalProperties":false
+  }' \
+  qwen-commit \
+  "$SUBJECT_PROMPT"
+    #printf "%s" "$diff_payload" | ollama run --format json qwen2.5-coder:7b "$SUBJECT_PROMPT"
+    #printf "%s" "$diff_payload" | OLLAMA_NO_COLOR=1 ollama run qwen2.5-coder:7b "$SUBJECT_PROMPT";
+}
+
+fix_json_control_chars() {
+    perl -0777 -pe '
+        # Remove real ANSI escape sequences
+        s/\e\[[0-9;?]*[ -\/]*[@-~]//g;
+
+        # Remove escaped ANSI sequences from JSON text
+        s/\\u001[bB]\[[0-9;?]*[ -\/]*[@-~]//g;
+
+        my $in_string = 0;
+        my $escaped = 0;
+        my $out = "";
+
+        for my $c (split //, $_) {
+            if ($escaped) {
+                $out .= $c;
+                $escaped = 0;
+                next;
+            }
+
+            if ($c eq "\\") {
+                $out .= "\\";
+                $escaped = 1;
+                next;
+            }
+
+            if ($c eq "\"") {
+                $out .= "\"";
+                $in_string = !$in_string;
+                next;
+            }
+
+            if ($in_string) {
+                # remove control characters inside JSON strings
+                next if $c eq "\n" || $c eq "\t" || $c eq "\r";
+            }
+
+            $out .= $c;
+        }
+
+        $_ = $out;
+    '
+}
+
+fix_json_control_chars_2() {
+    perl -pe '
+        s/([\x00-\x1F])/sprintf("\\u%04x", ord($1))/ge
+    '
 }
 
 # Generates a batch of commit message suggestions and sorts them longest first.
@@ -855,8 +933,16 @@ generate_batch() {
     print_center "Generating commit subject message suggestions..."
 
     while [ "$idx" -le "$end" ]; do
-        msg=$(generate_subject)
+        json_msg=$(generate_subject)
+        #printf '%s\n' "$json_msg"
+        #press_continue
+        json_msg=$(printf '%s' "$json_msg" | fix_json_control_chars)
+        #printf '%s\n' "$json_msg"
+        #press_continue
+        msg=$(printf '%s' "$json_msg" | jq -r '.description')
+        #printf '%s\n' "$msg"
         msg=$(cleanup_ai_msg "$msg")
+        #press_continue
         if [ -n "$msg" ]; then
             messages+=("$msg")
         fi
@@ -883,7 +969,7 @@ generate_batch() {
 # Add AI-generated commit message suggestions batch
 add_message_suggestions(){
     start_t=$SECONDS
-    total_ai_msg=$((total_ai_msg + 5))
+    total_ai_msg=$((total_ai_msg + 1))
     [ "$total_ai_msg" -gt $MAX_AI_MSGS ] && total_ai_msg=MAX_AI_MSGS
     start_idx=$((total_ai_msg - MSGS_ADD -1))
     [ "$start_idx" -lt 1 ] && start_idx=1
@@ -1087,7 +1173,11 @@ confirm_commit_message() {
 }
 
 strip_ansi() {
-    sed -E 's/\x1B\[[0-9;?]*[ -/]*[@-~]//g'
+    sed -E $'s/\x1B\\][^\x07]*(\x07|\x1B\\\\)//g; s/\x1B\\[[0-9;?]*[ -\\/]*[@-~]//g; s/\x1B[()][0-2A-Za-z]//g'
+    # sed -E$'s/\x1B\\[[0-9;?]*[ -\\/]*[@-~]//g'
+    #sed -E $'s/\x1B\\[[0-9;?]*[A-Za-z]//g; s/\\[[0-9;?]*[A-Za-z]//g'
+    #sed -E $'s/\x1B\\][^\x07]*(\x07|\x1B\\\\)//g; s/\x1B\\[[0-9;?]*[ -\\/]*[@-~]//g; s/\x1B[()][0-2A-Za-z]//g' \
+    #| tr -cd '\11\12\15\40-\176'
 }
 
 # ----------------------------
@@ -1166,7 +1256,17 @@ run_main_menu(){
                     printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
 
                     # Remove terminal escape sequences before opening editor
-                    sed -i -E 's/\x1B\[[0-9;?]*[ -\/]*[@-~]//g' "$COMMIT_MSG_FILE"
+                    #sed -i -E 's/\x1B\[[0-9;?]*[ -\/]*[@-~]//g' "$COMMIT_MSG_FILE"
+
+                    tmp=$(mktemp)
+
+                    strip_ansi < "$COMMIT_MSG_FILE" > "$tmp" &&
+                    cat "$tmp" > "$COMMIT_MSG_FILE"
+
+                    rm "$tmp"
+
+                    # discard buffered terminal input
+                    while read -r -t 0.01 -n 1 _ < /dev/tty; do :; done
 
                     # Reset terminal state before launching editor
                     stty sane < /dev/tty
@@ -1198,9 +1298,7 @@ run_main_menu(){
                 else
                     git show --unified=1 --no-color HEAD
                 fi
-                printf "\nPress any key to continue..." > /dev/tty
-                IFS= read -r -n1 < /dev/tty
-                printf "\n" > /dev/tty
+                press_continue
             ;;
 
             x)
