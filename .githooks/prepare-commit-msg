@@ -1024,6 +1024,7 @@ run_message_menu(){
                 fi
             ;;
             b)
+              exit 1
               run_body_menu
             ;;
             c)
