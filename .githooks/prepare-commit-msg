@@ -1072,6 +1072,7 @@ run_message_menu(){
                 fi
             ;;
             c)
+                clear
                 if git diff --cached | grep -q .; then
                     git diff --cached
                 elif git diff HEAD | grep -q .; then
