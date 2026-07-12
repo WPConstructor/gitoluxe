@@ -346,7 +346,8 @@ SUBJECT_PROMPT="Generate one concise commit subject from the provided diff.
 
 Requirements:
 - Do not output markdown, explanations, quotes, code fences, or any additional text.
-- Type Format: type(scope).
+- Type Format: type.
+- Scope Format: (scope) (Add brackets)
 - Description: description text.
 - Maximum length of description: 75 characters.
 - Use imperative mood (e.g. \"add\", \"fix\", \"update\", \"remove\").
@@ -392,6 +393,10 @@ Scope rules:
 - Prefer existing project terminology.
 - Omit the scope if it is unclear.
 - Do not use generic scopes like \"misc\", \"general\", or \"code\".
+
+create_body:
+- Set to true when the commit contains multiple unrelated changes, changes across different areas/components, or requires additional context beyond the subject line.
+- Set to false when the commit contains a single focused change that can be fully described by the subject line.
 
 Examples:
 type: fix | scope : (auth) | description : handle expired session tokens
@@ -861,6 +866,7 @@ generate_subject() {
       "type":{"type":"string"},
       "scope":{"type":"string"},
       "description":{"type":"string"}
+      "create_body":{"type":"bool"}
     },
     "required":["type","description"],
     "additionalProperties":false
@@ -940,6 +946,9 @@ generate_batch() {
         #printf '%s\n' "$json_msg"
         #press_continue
         msg=$(printf '%s' "$json_msg" | jq -r '.description')
+        create_body=$(printf '%s' "$json_msg" | jq -r '.create_body')
+        echo create_body;
+        press_continue
         #printf '%s\n' "$msg"
         msg=$(cleanup_ai_msg "$msg")
         #press_continue
