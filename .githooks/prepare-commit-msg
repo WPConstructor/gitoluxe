@@ -1057,7 +1057,7 @@ run_message_menu(){
                     var_name="AI_MSG_$choice"
                     final_msg=$(build_commit_message "${!var_name}" "$body_msg")
                     printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
-                    new_msg="✅ AI commit #$choice ($final_msg) accepted."
+                    echo "✅ AI commit #$choice ($final_msg) accepted."
                     exit 0
                 else
                     new_msg="❌ Please choose 1-$total_ai_msg"
