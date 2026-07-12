@@ -964,7 +964,12 @@ run_body_menu(){
             print_center "$body_time_info"
         fi
         print_seperator
-        print_center "No Commit Body has been added yet."
+        if [ "$body_msg" = "" ]; then
+            print_center "No Commit Body has been added yet."
+        else
+            print_center "$body_msg"
+        fi
+            
         print_seperator
         menu_items=(
             "[A] Add Body"
@@ -990,6 +995,7 @@ run_body_menu(){
                 # ----------------------------
                 # Generate AI body message
                 # ----------------------------
+                clear
                 start_t=$SECONDS
                 print_title
                 print_seperator
