@@ -987,38 +987,6 @@ print_messages(){
     done
 }
 
-print_messages_bak(){
-    local idx display_count msg var_name
-
-    if [ "${SHOW_PERFORMANCE_INFO:-0}" -eq 1 ]; then
-        debug_str=" ($gen_time_info / $diff_len chars)"
-    fi
-
-    idx=1
-    display_count=0
-
-    while [ "$idx" -le "$MAX_AI_MSGS" ]; do
-        var_name="AI_MSG_$idx"
-        msg="${!var_name}"
-
-        if [ -n "$msg" ]; then
-
-            # NEW: add empty line BEFORE each new group (except first)
-            if [ $((display_count % MSGS_ADD)) -eq 0 ] && [ "$display_count" -ne 0 ]; then
-                print_tty ""
-            fi
-
-            print_tty_indent_5 " [$idx] $msg"
-            display_count=$((display_count + 1))
-
-            print_tty ""
-
-        fi
-
-        idx=$((idx + 1))
-    done
-}
-
 # ----------------------------
 # Menu functions
 # ----------------------------
