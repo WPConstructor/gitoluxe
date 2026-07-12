@@ -1068,17 +1068,15 @@ run_body_menu(){
 
         print_title
         print_seperator
-        print_center "Step 2/4 Body Message"
+        print_center "Body Menu"
         print_seperator
-        print_center "Subject Text: Changed input to output"
         print_center "Body: None"
         print_seperator
         menu_items=(
-            "[B] Back"
             "[A] Add Body"
             "[E] Edit Body"
             "[R] Remove Body"
-            "[N] Next"
+            "[B] Back"
             "[H] Help"
         )
         print_menu
@@ -1101,8 +1099,8 @@ run_body_menu(){
     The commit body adds extra context when the subject line isn’t enough. It explains why a change was made, not just what changed. Use it for complex or multi-part changes. Keep it short and clear."
                 continue
             ;;
-            n)
-                exit 1
+            b)
+                return
             ;;
         esac
     done
