@@ -172,51 +172,6 @@ print_menu() {
     done
 }
 
-print_menu_bak() {
-    local width col_width cols i j item max_len=0 len line cell pad block_width filled
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    # Find longest item
-    for item in "${menu_items[@]}"; do
-        len=${#item}
-        [ "$len" -gt "$max_len" ] && max_len=$len
-    done
-
-    cols=$(( width / (max_len + 4) ))
-    [ "$cols" -lt 1 ] && cols=1
-
-    col_width=$(( max_len + 4 ))
-
-    # real used block width (NOT full terminal stretch)
-    block_width=$(( cols * col_width ))
-
-    pad=$(( (width - block_width) / 2 ))
-    [ "$pad" -lt 0 ] && pad=0
-
-    i=0
-    while [ $i -lt ${#menu_items[@]} ]; do
-        line=""
-        filled=0
-
-        for ((j=0; j<cols && i+j<${#menu_items[@]}; j++)); do
-            printf -v cell " %-*s" $((col_width - 1)) "${menu_items[i+j]}"
-            line+="$cell"
-            filled=$((filled + 1))
-        done
-
-        # IMPORTANT:
-        # DO NOT pad last row to full grid width
-        # Only keep real content width
-
-        line=$(printf "%s" "$line" | sed 's/[[:space:]]*$//')
-
-        printf "%*s%s\n" "$pad" "" "$line" > /dev/tty
-
-        i=$((i + cols))
-    done
-}
-
 # ----------------------------
 # String Utilities
 # ----------------------------
