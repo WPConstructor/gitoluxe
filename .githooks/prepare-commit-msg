@@ -876,9 +876,7 @@ generate_batch() {
     print_title
     print_seperator
 
-    print_center "Generating commit message suggestions..."
-
-    print_seperator
+    print_center "Generating commit subject message suggestions..."
 
     while [ "$idx" -le "$end" ]; do
         msg=$(generate_subject)
