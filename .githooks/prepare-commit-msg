@@ -1087,7 +1087,7 @@ confirm_commit_message() {
 }
 
 strip_ansi() {
-    sed -E 's/\x1B\[[0-9;]*[mKHFJ]//g'
+    sed -E 's/\x1B\[[0-9;?]*[ -/]*[@-~]//g'
 }
 
 # ----------------------------
@@ -1165,14 +1165,23 @@ run_main_menu(){
                     final_msg=$(build_commit_message "${!var_name}" "$body_msg" | strip_ansi)
                     printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
 
+                    # Remove terminal escape sequences before opening editor
+                    sed -i -E 's/\x1B\[[0-9;?]*[ -\/]*[@-~]//g' "$COMMIT_MSG_FILE"
+
+                    # Reset terminal state before launching editor
+                    stty sane < /dev/tty
+
                     "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2> /dev/tty
 
-                    if confirm_commit_message; then
-                        printf "Using edited commit message\n" > /dev/tty
-                        exit 0
-                    else
-                        continue
+                    if ! cmp -s "$COMMIT_MSG_FILE" <(printf "%s" "$final_msg"); then
+                        if confirm_commit_message; then
+                            printf "Using edited commit message\n" > /dev/tty
+                            exit 0
+                        else
+                            continue
+                        fi
                     fi
+                    continue
                 else
                     new_msg="❌ Please choose E1-E$total_ai_msg"
                 fi
