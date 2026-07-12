@@ -874,7 +874,7 @@ generate_batch() {
     local messages=()
 
     print_title
-    print_seperator
+    echo ""
 
     print_center "Generating commit subject message suggestions..."
 
@@ -1071,6 +1071,19 @@ run_message_menu(){
                     new_msg="❌ Please choose 1-$total_ai_msg"
                 fi
             ;;
+            c)
+                if git diff --cached | grep -q .; then
+                    git diff --cached
+                elif git diff HEAD | grep -q .; then
+                    git diff HEAD
+                else
+                    git show --unified=1 --no-color HEAD
+                fi
+                printf "\nPress any key to continue..." > /dev/tty
+                IFS= read -r -n1 < /dev/tty
+                printf "\n" > /dev/tty
+            ;;
+
             x)
                 exit 1
             ;;
