@@ -1060,6 +1060,32 @@ check_choice() {
     fi
 }
 
+# Ask a Yes/No confirmation question using /dev/tty.
+confirm_commit_message() {
+    local choice
+
+    while true; do
+        printf "Do you want to use this edited commit message? (Y/N): " > /dev/tty
+        read -r choice < /dev/tty
+
+        case "$choice" in
+            [Yy])
+                return 0
+                ;;
+            [Nn])
+                return 1
+                ;;
+            *)
+                printf "Please answer Y or N.\n" > /dev/tty
+                ;;
+        esac
+    done
+}
+
+strip_ansi() {
+    sed -E 's/\x1B\[[0-9;]*[mKHFJ]//g'
+}
+
 # ----------------------------
 # Main Menu Loop
 # ----------------------------
@@ -1089,8 +1115,9 @@ run_main_menu(){
         print_messages
         print_seperator
         menu_items=(
-            "[1-5] Choose Suggestion"
             "[C] Show Changes"
+            "[1-5] Choose Suggestion"
+            "[E1-E5] Edit and Choose Suggestion"
             "[A] Add Suggestions"
             "[B] Body Menu"
             "[M] Manual Message"
@@ -1127,6 +1154,27 @@ run_main_menu(){
                     new_msg="❌ Please choose 1-$total_ai_msg"
                 fi
             ;;
+            e[0-9]*)
+                idx="${choice#e}"
+                if check_choice "$idx" $total_ai_msg; then
+                    var_name="AI_MSG_$idx"
+                    final_msg=$(build_commit_message "${!var_name}" "$body_msg" | strip_ansi)
+                    printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
+                    exec < /dev/tty
+                    exec > /dev/tty
+                    exec 2> /dev/tty
+                    "${EDITOR:-nano}" "$COMMIT_MSG_FILE"
+                    if confirm_commit_message; then
+                        printf "Using edited commit message\n" > /dev/tty
+                        exit 0;
+                    else
+                        continue;
+                    fi
+                else
+                    new_msg="❌ Please choose E1-E$total_ai_msg"
+                fi
+            ;;
+
             b)
               run_body_menu
             ;;
