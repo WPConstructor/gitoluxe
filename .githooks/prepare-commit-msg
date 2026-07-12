@@ -1025,7 +1025,7 @@ run_message_menu(){
 
         print_center "Main Menu"
         if [ "$debug_str" != "" ]; then
-            print_center "$debug_str"
+            print_center "($debug_str)"
         fi
         print_seperator
         print_messages
