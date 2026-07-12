@@ -885,7 +885,7 @@ add_message_suggestions(){
 }
 
 # ----------------------------
-# Display Functions (Step 1)
+# Display Functions
 # ----------------------------
 
 print_messages(){
@@ -941,6 +941,79 @@ print_messages(){
     done
 }
 
+# ============================
+# Body Menu
+# ============================
+
+# ----------------------------
+# Menu Loop
+# ----------------------------
+
+run_body_menu(){
+    new_body_msg=""
+
+    while true; do
+
+        clear
+
+        print_title
+        print_seperator
+        print_center "Body Menu"
+        print_seperator
+        print_center "No Commit Body has been defined yet."
+        print_seperator
+        menu_items=(
+            "[A] Add Body"
+            "[E] Edit Body"
+            "[R] Remove Body"
+            "[B] Back"
+            "[H] Help"
+        )
+        print_menu
+        print_seperator
+        if [ -n "$new_body_msg" ]; then
+            print_tty_indent_1 "$new_body_msg"
+            print_seperator
+            new_body_msg=""
+        fi
+
+        printf " ? " > /dev/tty
+        if ! IFS= read -r choice < /dev/tty; then
+            choice="1"
+        fi
+        choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
+        case "$choice" in
+            h)
+                new_body_msg=" Add body if multiple changes or subject is unclear.
+
+    The commit body adds extra context when the subject line isn’t enough. It explains why a change was made, not just what changed. Use it for complex or multi-part changes. Keep it short and clear."
+                continue
+            ;;
+            b)
+                return
+            ;;
+        esac
+    done
+}
+
+    # ----------------------------
+    # 🤖 Generate AI body message
+    # ----------------------------
+#    if [ "$regen_ai" = "2" ]; then
+#        start_t=$SECONDS
+#        echo "Generating commit body message..." > /dev/tty
+#        body_msg=$(generate_body)
+#        body_msg="$(
+#        echo "$body_msg" \
+#        | sed 's/```.*//g' \
+#        | sed 's/`//g' \
+#        | sed 's/\*\*//g' \
+#        | sed '/^[[:space:]]*$/d'
+#        )"
+#        body_time_info=" ($((SECONDS - start_t))s)"
+#        regen_ai=0
+#    fi
+
 # ----------------------------
 # Menu functions
 # ----------------------------
@@ -963,7 +1036,7 @@ check_choice() {
 clear
 add_message_suggestions
 
-run_message_menu(){
+run_main_menu(){
     local new_message_msg=""
 
     while true; do
@@ -1024,7 +1097,6 @@ run_message_menu(){
                 fi
             ;;
             b)
-              exit 1
               run_body_menu
             ;;
             c)
@@ -1049,81 +1121,4 @@ run_message_menu(){
 
 }
 
-run_message_menu
-
-
-# ============================
-# Body Menu
-# ============================
-
-# ----------------------------
-# Menu Loop
-# ----------------------------
-
-run_body_menu(){
-    new_body_msg=""
-
-    while true; do
-
-        clear
-
-        print_title
-        print_seperator
-        print_center "Body Menu"
-        print_seperator
-        print_center "Body: None"
-        print_seperator
-        menu_items=(
-            "[A] Add Body"
-            "[E] Edit Body"
-            "[R] Remove Body"
-            "[B] Back"
-            "[H] Help"
-        )
-        print_menu
-        print_seperator
-        if [ -n "$new_body_msg" ]; then
-            print_tty_indent_1 "$new_body_msg"
-            print_seperator
-            new_body_msg=""
-        fi
-
-        printf " ? " > /dev/tty
-        if ! IFS= read -r choice < /dev/tty; then
-            choice="1"
-        fi
-        choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
-        case "$choice" in
-            h)
-                new_body_msg=" Add body if multiple changes or subject is unclear.
-
-    The commit body adds extra context when the subject line isn’t enough. It explains why a change was made, not just what changed. Use it for complex or multi-part changes. Keep it short and clear."
-                continue
-            ;;
-            b)
-                return
-            ;;
-        esac
-    done
-}
-
-    # ----------------------------
-    # 🤖 Generate AI body message
-    # ----------------------------
-    if [ "$regen_ai" = "2" ]; then
-        start_t=$SECONDS
-        echo "Generating commit body message..." > /dev/tty
-        body_msg=$(generate_body)
-        body_msg="$(
-        echo "$body_msg" \
-        | sed 's/```.*//g' \
-        | sed 's/`//g' \
-        | sed 's/\*\*//g' \
-        | sed '/^[[:space:]]*$/d'
-        )"
-        body_time_info=" ($((SECONDS - start_t))s)"
-        regen_ai=0
-    fi
-
-
-exit 0;
+run_main_menu
