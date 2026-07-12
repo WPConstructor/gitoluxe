@@ -950,6 +950,7 @@ print_messages(){
 # ----------------------------
 
 run_body_menu(){
+    body_time_info="";
     new_body_msg=""
 
     while true; do
@@ -959,8 +960,11 @@ run_body_menu(){
         print_title
         print_seperator
         print_center "Body Menu"
+        if [ "$body_time_info" != "" ]; then
+            print_center "$body_time_info"
+        fi
         print_seperator
-        print_center "No Commit Body has been defined yet."
+        print_center "No Commit Body has been added yet."
         print_seperator
         menu_items=(
             "[A] Add Body"
@@ -971,9 +975,8 @@ run_body_menu(){
         )
         print_menu
         print_seperator
-        if [ -n "$new_body_msg" ]; then
+        if [ "$body_time_info" != "" ]; then
             print_tty_indent_1 "$new_body_msg"
-            print_seperator
             new_body_msg=""
         fi
 
@@ -983,6 +986,25 @@ run_body_menu(){
         fi
         choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
         case "$choice" in
+            a)
+                # ----------------------------
+                # Generate AI body message
+                # ----------------------------
+                start_t=$SECONDS
+                print_title
+                print_seperator
+                echo "Generating commit body message..." > /dev/tty
+                body_msg=$(generate_body)
+                body_msg="$(
+                echo "$body_msg" \
+                | sed 's/```.*//g' \
+                | sed 's/`//g' \
+                | sed 's/\*\*//g' \
+                | sed '/^[[:space:]]*$/d'
+                )"
+                body_time_info="Generation took ($((SECONDS - start_t))s) of $diff_len characters"
+                regen_ai=0
+            ;;
             h)
                 new_body_msg=" Add body if multiple changes or subject is unclear.
 
@@ -995,24 +1017,6 @@ run_body_menu(){
         esac
     done
 }
-
-    # ----------------------------
-    # 🤖 Generate AI body message
-    # ----------------------------
-#    if [ "$regen_ai" = "2" ]; then
-#        start_t=$SECONDS
-#        echo "Generating commit body message..." > /dev/tty
-#        body_msg=$(generate_body)
-#        body_msg="$(
-#        echo "$body_msg" \
-#        | sed 's/```.*//g' \
-#        | sed 's/`//g' \
-#        | sed 's/\*\*//g' \
-#        | sed '/^[[:space:]]*$/d'
-#        )"
-#        body_time_info=" ($((SECONDS - start_t))s)"
-#        regen_ai=0
-#    fi
 
 # ----------------------------
 # Menu functions
