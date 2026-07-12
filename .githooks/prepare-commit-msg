@@ -23,6 +23,204 @@ MSGS_ADD=5
 # Functions
 # ============================
 
+# ============================
+# Common Functions 
+# ============================
+
+# ----------------------------
+# Display (print) Functions
+# ----------------------------
+
+# Displays the ASCII art title.
+print_title() {
+    local width line trimmed pad
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    while IFS= read -r line; do
+        # skip empty lines
+        [ -z "$line" ] && continue
+
+        # truncate line to terminal width
+        trimmed="${line:0:width}"
+
+        # compute padding for centering
+        pad=$(( (width - ${#trimmed}) / 2 ))
+        [ "$pad" -lt 0 ] && pad=0
+
+        # print centered line to tty
+        printf "%*s%s\n" "$pad" "" "$trimmed" > /dev/tty
+    done << 'EOF'
+  ________.__  __         .__                       
+ /  _____/|__|/  |_  ____ |  |  __ _____  ___ ____  
+/   \  ___|  \   __\/  _ \|  | |  |  \  \/  // __ \ 
+\    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
+ \______  /__||__|  \____/|____/____//__/\_ \\___  >
+        \/                                 \/    \/ 
+V1.0.0
+EOF
+}
+
+# prints a text in the middle of the window
+print_center() {
+    local text="$1"
+    local width cols padding
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    # strip ANSI escape codes (optional safety)
+    cols=${#text}
+
+    padding=$(( (width - cols) / 2 ))
+    [ "$padding" -lt 0 ] && padding=0
+
+    printf "%*s%s\n" "$padding" "" "$text" > /dev/tty
+}
+
+# Prints a message to the TTY, wrapped to the terminal width.
+print_tty() {
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+    echo -e "$@" | fold -s -w "$width" > /dev/tty
+}
+
+# Prints a message to the TTY, wrapped and with a 1-space indent on subsequent lines.
+print_tty_indent_1() {
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    printf "%s\n" "$@" \
+        | fold -s -w "$width" \
+        | sed '2,$s/^/ /' \
+        > /dev/tty
+}
+
+# Prints a message to the TTY, wrapped and with a 5-space indent on subsequent lines.
+print_tty_indent_5() {
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    printf "%s\n" "$@" \
+        | fold -s -w "$width" \
+        | sed '2,$s/^/     /' \
+        > /dev/tty
+}
+
+# Displays a horizontal line separator spanning the terminal width.
+print_seperator() {
+    local width char inner line
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+    char="-"
+
+    # leave 1 space left + 1 space right
+    inner=$((width - 2))
+    [ "$inner" -lt 1 ] && inner=1
+
+    printf -v line '%*s' "$inner" ''
+    line=${line// /$char}
+
+    printf " %s \n" "$line" > /dev/tty
+}
+
+# ----------------------------
+# Menu Functions
+# ----------------------------
+
+# Print a centered, responsive multi-column menu in the terminal
+print_menu() {
+    local width cols i j item len pad line cell
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    # find max columns based on typical width
+    cols=$(( width / 20 ))
+    [ "$cols" -lt 1 ] && cols=1
+
+    # find max per column
+    declare -a col_max
+
+    for ((i=0; i<cols; i++)); do
+        col_max[i]=0
+    done
+
+    for i in "${!menu_items[@]}"; do
+        col=$(( i % cols ))
+        len=${#menu_items[i]}
+        [ "$len" -gt "${col_max[col]}" ] && col_max[col]=$len
+    done
+
+    # compute total width
+    local row_width=0
+    for ((i=0; i<cols; i++)); do
+        row_width=$(( row_width + col_max[i] + 2 ))
+    done
+
+    pad=$(( (width - row_width) / 2 + 1))
+    [ "$pad" -lt 0 ] && pad=0
+
+    i=0
+    while [ $i -lt ${#menu_items[@]} ]; do
+        line=""
+
+        for ((j=0; j<cols; j++)); do
+            if [ $((i + j)) -lt ${#menu_items[@]} ]; then
+                printf -v cell "%-*s" "${col_max[j]}" "${menu_items[i+j]}"
+            else
+                printf -v cell "%-*s" "${col_max[j]}" ""
+            fi
+
+            line+="$cell  "
+        done
+
+        printf "%*s%s\n" "$pad" "" "$line" > /dev/tty
+
+        i=$((i + cols))
+    done
+}
+
+print_menu_bak() {
+    local width col_width cols i j item max_len=0 len line cell pad block_width filled
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    # Find longest item
+    for item in "${menu_items[@]}"; do
+        len=${#item}
+        [ "$len" -gt "$max_len" ] && max_len=$len
+    done
+
+    cols=$(( width / (max_len + 4) ))
+    [ "$cols" -lt 1 ] && cols=1
+
+    col_width=$(( max_len + 4 ))
+
+    # real used block width (NOT full terminal stretch)
+    block_width=$(( cols * col_width ))
+
+    pad=$(( (width - block_width) / 2 ))
+    [ "$pad" -lt 0 ] && pad=0
+
+    i=0
+    while [ $i -lt ${#menu_items[@]} ]; do
+        line=""
+        filled=0
+
+        for ((j=0; j<cols && i+j<${#menu_items[@]}; j++)); do
+            printf -v cell " %-*s" $((col_width - 1)) "${menu_items[i+j]}"
+            line+="$cell"
+            filled=$((filled + 1))
+        done
+
+        # IMPORTANT:
+        # DO NOT pad last row to full grid width
+        # Only keep real content width
+
+        line=$(printf "%s" "$line" | sed 's/[[:space:]]*$//')
+
+        printf "%*s%s\n" "$pad" "" "$line" > /dev/tty
+
+        i=$((i + cols))
+    done
+}
+
 # ----------------------------
 # String Utilities
 # ----------------------------
@@ -148,7 +346,7 @@ diff_len=${#staged_diff}
 [ "$diff_len" -eq "$MAX_CHARS" ] && staged_diff="${staged_diff}\n\n... (truncated)"
 
 # ----------------------------
-# 🧠 AI Prompts & Data
+# AI Prompts & Data
 # ----------------------------
 
 diff_payload=$(printf "
@@ -166,35 +364,22 @@ SUMMARIZED DIFF:
     s|^([+-])[[:space:]]*/\*|\1 COMMENT:|;
 ')
 
-SUBJECT_PROMPT="Generate one or multiple commit messages from the provided diff.
-
-Rules for multiple changes:
-- If the diff contains multiple independent changes, create multiple commit messages.
-- Separate multiple commit messages with a comma followed by a space.
-- Each commit message must follow the format: type(scope): description
-- Keep each individual commit message under 120 characters.
-- Do not create multiple messages for small related changes; combine them into one message.
-- Maximum number of commit messages: 3.
-
-Examples:
-Single change:
-fix(cli): handle missing config file
-
-Multiple independent changes:
-fix(cli): handle missing config file, docs: update installation guide, refactor(ai): simplify prompt handling
+SUBJECT_PROMPT="Generate one concise commit subject from the provided diff.
 
 Requirements:
 - Output exactly one line.
 - Do not output markdown, explanations, quotes, code fences, or any additional text.
-- Format: type(scope): description
-- Omit the scope if it is not obvious.
-- Maximum length: 120 characters.
+- Format: type(scope): description.
+- Maximum length: 75 characters.
 - Use imperative mood (e.g. \"add\", \"fix\", \"update\", \"remove\").
-- Describe the primary outcome or purpose of the change, not implementation details.
-- Be specific about what changed: include the affected behavior, component, or condition when possible.
-- Avoid vague wording such as \"improve\", \"update\", or \"fix issue\" without context.
+- Describe only the main purpose of the change.
+- Select the most significant change in the diff.
+- Ignore minor secondary changes; they belong in the commit body.
+- Describe the outcome or behavior change, not implementation details.
+- Be specific about what changed.
+- Avoid vague wording such as \"update\", \"improve\", or \"fix issue\" without context.
 
-Type selection (choose the most significant change):
+Type selection:
 - feat: new user-visible functionality or behavior.
 - fix: correction of incorrect behavior.
 - refactor: internal restructuring without behavior change.
@@ -205,34 +390,48 @@ Type selection (choose the most significant change):
 - chore: maintenance, tooling, configuration, or housekeeping.
 - release: version release changes.
 - remove: removal of functionality, code, or files.
-- build: build system or dependency management changes.
+- build: build system or dependency management.
 - ci: CI/CD changes.
 - security: security-related fixes or improvements.
-- i18n: internationalization or localization changes.
+- i18n: internationalization or localization.
 - deps: dependency updates.
-- hotfix: urgent production fix.
 - ui: user interface or visual changes.
-- merge: branch merge.
-- revert: revert of previous changes.
-- move: file or directory moves/renames.
 - cleanup: minor cleanup and non-functional improvements.
 
 Classification rules:
-- Classify based on behavior, not code volume.
-- Base the message strictly on observable changes in the diff.
-- New functions, refactoring, renaming, moving files, comments, formatting, labels, and cleanup are not feats by themselves.
-- Documentation changes are docs unless accompanied by a more significant code change.
-- Comments provide context but do not affect the type.
-- If behavior does not change, prefer refactor over feat.
-- If any user-visible functionality is added, prefer feat.
-- If any incorrect behavior is corrected, prefer fix.
-- For "fix", explicitly describe what was wrong and what changed.
-- Choose the single best type; do not combine types.
+- Classify based on behavior and user impact, not code volume.
+- Base the subject strictly on observable changes in the diff.
+- New functions, refactoring, renaming, moving files, comments, formatting, labels, and cleanup are not automatically feat.
+- If behavior does not change, prefer refactor, chore, style, or cleanup.
+- If user-visible functionality is added, prefer feat.
+- If incorrect behavior is corrected, prefer fix.
+- For fix commits, describe what was wrong and what changed.
+- Choose exactly one type.
 
-Available scopes (use only if clearly applicable):
-githooks, ai, ollama, commit, cli, installer
+Scope rules:
+- Infer the scope from the files, modules, components, or functionality changed.
+- Use a short, meaningful lowercase scope.
+- Prefer existing project terminology.
+- Omit the scope if it is unclear.
+- Do not use generic scopes like \"misc\", \"general\", or \"code\".
 
-Return only the commit message."
+Examples:
+fix(auth): handle expired session tokens
+feat(api): add user profile endpoint
+refactor(parser): simplify markdown processing
+docs(readme): clarify installation steps
+
+OUTPUT FORMAT:
+Return plain text only.
+Do NOT return JSON.
+Do NOT use braces {}, keys, arrays, or quotes.
+
+Example valid output:
+fix(cli): handle missing config file
+
+OUTPUT FORMAT:Plain text only. One line. No JSON.
+Return only the commit subject.
+Maximum length: 75 characters."
 
 BODY_PROMPT="Generate only the Git commit body.
 
@@ -269,7 +468,7 @@ Supports regenerating or editing suggestions."
 
 # Generates the commit message body using Ollama.
 generate_body() {
-    printf "%s" "$diff_payload" | ollama run qwen2.5-coder:7b "$BODY_PROMPT"
+    printf "%s" "$diff_payload" | OLLAMA_KEEP_ALIVE=30m ollama run qwen2.5-coder:7b "$BODY_PROMPT"
 }
 
 # Gets the description for a given conventional commit type.
@@ -650,204 +849,6 @@ while true; do
 done
 
 # ============================
-# Common Functions 
-# ============================
-
-# ----------------------------
-# Display (print) Functions
-# ----------------------------
-
-# Displays the ASCII art title.
-print_title() {
-    local width line trimmed pad
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    while IFS= read -r line; do
-        # skip empty lines
-        [ -z "$line" ] && continue
-
-        # truncate line to terminal width
-        trimmed="${line:0:width}"
-
-        # compute padding for centering
-        pad=$(( (width - ${#trimmed}) / 2 ))
-        [ "$pad" -lt 0 ] && pad=0
-
-        # print centered line to tty
-        printf "%*s%s\n" "$pad" "" "$trimmed" > /dev/tty
-    done << 'EOF'
-  ________.__  __         .__                       
- /  _____/|__|/  |_  ____ |  |  __ _____  ___ ____  
-/   \  ___|  \   __\/  _ \|  | |  |  \  \/  // __ \ 
-\    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
- \______  /__||__|  \____/|____/____//__/\_ \\___  >
-        \/                                 \/    \/ 
-V1.0.0
-EOF
-}
-
-# prints a text in the middle of the window
-print_center() {
-    local text="$1"
-    local width cols padding
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    # strip ANSI escape codes (optional safety)
-    cols=${#text}
-
-    padding=$(( (width - cols) / 2 ))
-    [ "$padding" -lt 0 ] && padding=0
-
-    printf "%*s%s\n" "$padding" "" "$text" > /dev/tty
-}
-
-# Prints a message to the TTY, wrapped to the terminal width.
-print_tty() {
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-    echo -e "$@" | fold -s -w "$width" > /dev/tty
-}
-
-# Prints a message to the TTY, wrapped and with a 1-space indent on subsequent lines.
-print_tty_indent_1() {
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    printf "%s\n" "$@" \
-        | fold -s -w "$width" \
-        | sed '2,$s/^/ /' \
-        > /dev/tty
-}
-
-# Prints a message to the TTY, wrapped and with a 5-space indent on subsequent lines.
-print_tty_indent_5() {
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    printf "%s\n" "$@" \
-        | fold -s -w "$width" \
-        | sed '2,$s/^/     /' \
-        > /dev/tty
-}
-
-# Displays a horizontal line separator spanning the terminal width.
-print_seperator() {
-    local width char inner line
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-    char="-"
-
-    # leave 1 space left + 1 space right
-    inner=$((width - 2))
-    [ "$inner" -lt 1 ] && inner=1
-
-    printf -v line '%*s' "$inner" ''
-    line=${line// /$char}
-
-    printf " %s \n" "$line" > /dev/tty
-}
-
-# ----------------------------
-# Menu Functions
-# ----------------------------
-
-# Print a centered, responsive multi-column menu in the terminal
-print_menu() {
-    local width cols i j item len pad line cell
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    # find max columns based on typical width
-    cols=$(( width / 20 ))
-    [ "$cols" -lt 1 ] && cols=1
-
-    # find max per column
-    declare -a col_max
-
-    for ((i=0; i<cols; i++)); do
-        col_max[i]=0
-    done
-
-    for i in "${!menu_items[@]}"; do
-        col=$(( i % cols ))
-        len=${#menu_items[i]}
-        [ "$len" -gt "${col_max[col]}" ] && col_max[col]=$len
-    done
-
-    # compute total width
-    local row_width=0
-    for ((i=0; i<cols; i++)); do
-        row_width=$(( row_width + col_max[i] + 2 ))
-    done
-
-    pad=$(( (width - row_width) / 2 + 1))
-    [ "$pad" -lt 0 ] && pad=0
-
-    i=0
-    while [ $i -lt ${#menu_items[@]} ]; do
-        line=""
-
-        for ((j=0; j<cols; j++)); do
-            if [ $((i + j)) -lt ${#menu_items[@]} ]; then
-                printf -v cell "%-*s" "${col_max[j]}" "${menu_items[i+j]}"
-            else
-                printf -v cell "%-*s" "${col_max[j]}" ""
-            fi
-
-            line+="$cell  "
-        done
-
-        printf "%*s%s\n" "$pad" "" "$line" > /dev/tty
-
-        i=$((i + cols))
-    done
-}
-
-print_menu_bak() {
-    local width col_width cols i j item max_len=0 len line cell pad block_width filled
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    # Find longest item
-    for item in "${menu_items[@]}"; do
-        len=${#item}
-        [ "$len" -gt "$max_len" ] && max_len=$len
-    done
-
-    cols=$(( width / (max_len + 4) ))
-    [ "$cols" -lt 1 ] && cols=1
-
-    col_width=$(( max_len + 4 ))
-
-    # real used block width (NOT full terminal stretch)
-    block_width=$(( cols * col_width ))
-
-    pad=$(( (width - block_width) / 2 ))
-    [ "$pad" -lt 0 ] && pad=0
-
-    i=0
-    while [ $i -lt ${#menu_items[@]} ]; do
-        line=""
-        filled=0
-
-        for ((j=0; j<cols && i+j<${#menu_items[@]}; j++)); do
-            printf -v cell " %-*s" $((col_width - 1)) "${menu_items[i+j]}"
-            line+="$cell"
-            filled=$((filled + 1))
-        done
-
-        # IMPORTANT:
-        # DO NOT pad last row to full grid width
-        # Only keep real content width
-
-        line=$(printf "%s" "$line" | sed 's/[[:space:]]*$//')
-
-        printf "%*s%s\n" "$pad" "" "$line" > /dev/tty
-
-        i=$((i + cols))
-    done
-}
-
-# ============================
 # Select Message (Step 1)
 # ============================
 
@@ -877,7 +878,6 @@ generate_batch() {
     while [ "$idx" -le "$end" ]; do
         msg=$(generate_subject)
         msg=$(cleanup_ai_msg "$msg")
-
         if [ -n "$msg" ]; then
             messages+=("$msg")
         fi
@@ -889,7 +889,7 @@ generate_batch() {
     readarray -t messages < <(
         printf "%s\n" "${messages[@]}" |
         awk '{ print length($0) "\t" $0 }' |
-        sort -rn |
+        sort -n |
         cut -f2-
     )
 
@@ -911,6 +911,7 @@ add_message_suggestions(){
 
     generate_batch "$start_idx" "$total_ai_msg"
 
+    # Extract scopes from generated commit messages and collect unique scopes
     for i in $(seq "$start_idx" "$total_ai_msg"); do
         var_name="AI_MSG_$i"
         msg="${!var_name}"
@@ -935,10 +936,7 @@ add_message_suggestions(){
 
 print_messages(){
     local idx display_count msg var_name next_found tmp j
-
-    if [ "${SHOW_PERFORMANCE_INFO:-0}" -eq 1 ]; then
-        debug_str=" ($gen_time_info / $diff_len chars)"
-    fi
+    declare -A printed_msgs
 
     idx=1
     display_count=0
@@ -949,27 +947,34 @@ print_messages(){
 
         if [ -n "$msg" ]; then
 
+            # Skip duplicate AI messages
+            if [ -n "${printed_msgs[$msg]}" ]; then
+                idx=$((idx + 1))
+                continue
+            fi
+            printed_msgs[$msg]=1
+
             # group spacing (before group except first)
             if [ $((display_count % MSGS_ADD)) -eq 0 ] && [ "$display_count" -ne 0 ]; then
                 print_tty ""
             fi
 
-            msg="${msg#*: }"
-
             print_tty_indent_5 " [$idx] $msg"
 
             display_count=$((display_count + 1))
 
-            # check if another message exists AFTER this one (SAFE VERSION)
+            # check if another unique message exists AFTER this one
             next_found=0
             j=$((idx + 1))
 
             while [ "$j" -le "$MAX_AI_MSGS" ]; do
                 tmp="AI_MSG_$j"
-                if [ -n "${!tmp}" ]; then
+
+                if [ -n "${!tmp}" ] && [ -z "${printed_msgs[${!tmp}]}" ]; then
                     next_found=1
                     break
                 fi
+
                 j=$((j + 1))
             done
 
@@ -1045,7 +1050,15 @@ run_message_menu(){
 
         print_title
         print_seperator
-        print_center "Step 1/4 : Select Message"
+        debug_str=""
+        if [ "${SHOW_PERFORMANCE_INFO:-0}" -eq 1 ]; then
+            debug_str="Generation took $gen_time_info of $diff_len characters"
+        fi
+
+        print_center "Select Message"
+        if [ "$debug_str" != "" ]; then
+            print_center "$debug_str"
+        fi
         print_seperator
         print_messages
         print_seperator
