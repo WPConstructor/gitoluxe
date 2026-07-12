@@ -830,7 +830,11 @@ done
 
 # Cleans up AI-generated messages by removing newlines, tabs, backticks, and extra spaces.
 cleanup_ai_msg() {
-    echo "$1" | tr -d '\n\t' | sed -E 's/[[:space:]]+/ /g; s/`//g' | cut -c1-150
+    echo "$1" \
+    | sed -E 's/\x1B\[[0-9;]*[mKHFJ]//g' \
+    | tr -d '\n\t' \
+    | sed -E 's/[[:space:]]+/ /g; s/`//g' \
+    | cut -c1-150
 }
 
 # Generates the commit message subject using Ollama.
@@ -1160,9 +1164,6 @@ run_main_menu(){
                     var_name="AI_MSG_$idx"
                     final_msg=$(build_commit_message "${!var_name}" "$body_msg" | strip_ansi)
                     printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
-                    exec < /dev/tty
-                    exec > /dev/tty
-                    exec 2> /dev/tty
                     "${EDITOR:-nano}" "$COMMIT_MSG_FILE"
                     if confirm_commit_message; then
                         printf "Using edited commit message\n" > /dev/tty
