@@ -73,6 +73,27 @@ print_center() {
     printf "%*s%s\n" "$padding" "" "$text" > /dev/tty
 }
 
+# Prints a multi-line text centered as one block.
+print_multi_line_center() {
+    local text="$1"
+    local width longest=0 padding line
+
+    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
+
+    # Find longest line
+    while IFS= read -r line; do
+        [ ${#line} -gt "$longest" ] && longest=${#line}
+    done <<< "$text"
+
+    padding=$(( (width - longest) / 2 ))
+    [ "$padding" -lt 0 ] && padding=0
+
+    # Print all lines with the same padding
+    while IFS= read -r line; do
+        printf "%*s%s\n" "$padding" "" "$line" > /dev/tty
+    done <<< "$text"
+}
+
 # Prints a message to the TTY, wrapped to the terminal width.
 print_tty() {
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
@@ -967,7 +988,7 @@ run_body_menu(){
         if [ "$body_msg" = "" ]; then
             print_center "No Commit Body has been added yet."
         else
-            print_center "$body_msg"
+            print_multi_line_center "$body_msg"
         fi
             
         print_seperator
@@ -999,7 +1020,7 @@ run_body_menu(){
                 start_t=$SECONDS
                 print_title
                 print_seperator
-                echo "Generating commit body message..." > /dev/tty
+                print_center "Generating commit body message..." > /dev/tty
                 body_msg=$(generate_body)
                 body_msg="$(
                 echo "$body_msg" \
