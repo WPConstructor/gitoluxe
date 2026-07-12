@@ -986,8 +986,9 @@ run_message_menu(){
         print_seperator
         menu_items=(
             "[1-5] Choose Suggestion"
-            "[A] Add Suggestions"
             "[C] Show Changes"
+            "[A] Add Suggestions"
+            "[B] Body Menu"
             "[M] Manual Message"
             "[X] Exit without commiting"
         )
@@ -1022,6 +1023,9 @@ run_message_menu(){
                     new_msg="❌ Please choose 1-$total_ai_msg"
                 fi
             ;;
+            b)
+              run_body_menu
+            ;;
             c)
                 clear
                 if git diff --cached | grep -q .; then
@@ -1048,7 +1052,7 @@ run_message_menu
 
 
 # ============================
-# Step 2/4 Add Body
+# Body Menu
 # ============================
 
 # ----------------------------
@@ -1104,9 +1108,6 @@ run_body_menu(){
     done
 }
 
-run_body_menu
-exit 1
-#test
     # ----------------------------
     # 🤖 Generate AI body message
     # ----------------------------
