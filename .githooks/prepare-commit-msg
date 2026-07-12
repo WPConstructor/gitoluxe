@@ -27,17 +27,6 @@ MSGS_ADD=5
 # String Utilities
 # ----------------------------
 
-# Checks if a given choice is a valid number within a given range.
-check_choice() {
-    local choice="$1"
-    local max="$2"
-    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$max" ]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
 # Constructs the final commit message from a subject and an optional body.
 build_commit_message() {
     local subject="$1"
@@ -117,7 +106,7 @@ esac
 existing_msg=$(cat "$COMMIT_MSG_FILE" 2>/dev/null)
 
 case "$existing_msg" in
-    "ai")
+    "ai"|"")
         ;;
     *)
         exit 0
@@ -177,7 +166,22 @@ SUMMARIZED DIFF:
     s|^([+-])[[:space:]]*/\*|\1 COMMENT:|;
 ')
 
-SUBJECT_PROMPT="Generate exactly one Conventional Commit message from the provided diff.
+SUBJECT_PROMPT="Generate one or multiple commit messages from the provided diff.
+
+Rules for multiple changes:
+- If the diff contains multiple independent changes, create multiple commit messages.
+- Separate multiple commit messages with a comma followed by a space.
+- Each commit message must follow the format: type(scope): description
+- Keep each individual commit message under 120 characters.
+- Do not create multiple messages for small related changes; combine them into one message.
+- Maximum number of commit messages: 3.
+
+Examples:
+Single change:
+fix(cli): handle missing config file
+
+Multiple independent changes:
+fix(cli): handle missing config file, docs: update installation guide, refactor(ai): simplify prompt handling
 
 Requirements:
 - Output exactly one line.
@@ -383,7 +387,7 @@ body_msg=""
 new_msg=""
 
 # ----------------------------------
-# 🧠 Step 1/4 Select Subject Message 
+# Step 1/4 Select Subject Message 
 # ----------------------------------
 while true; do
 
@@ -861,16 +865,37 @@ generate_subject() {
     printf "%s" "$diff_payload" | ollama run qwen2.5-coder:7b "$SUBJECT_PROMPT"
 }
 
-# Generates a batch of commit message suggestions.
+# Generates a batch of commit message suggestions and sorts them longest first.
 generate_batch() {
     local start=$1
     local end=$2
     local idx=$start
+    local messages=()
+
     echo "Generating commit message suggestions..." > /dev/tty
+
     while [ "$idx" -le "$end" ]; do
         msg=$(generate_subject)
         msg=$(cleanup_ai_msg "$msg")
-        # Assign Dynamic Value
+
+        if [ -n "$msg" ]; then
+            messages+=("$msg")
+        fi
+
+        idx=$((idx + 1))
+    done
+
+    # Sort messages by length: shortest first, longest last
+    readarray -t messages < <(
+        printf "%s\n" "${messages[@]}" |
+        awk '{ print length($0) "\t" $0 }' |
+        sort -rn |
+        cut -f2-
+    )
+
+    # Assign sorted messages back to AI_MSG variables
+    idx=$start
+    for msg in "${messages[@]}"; do
         printf -v "AI_MSG_$idx" '%s' "$msg"
         idx=$((idx + 1))
     done
@@ -990,6 +1015,21 @@ print_messages_bak(){
 }
 
 # ----------------------------
+# Menu functions
+# ----------------------------
+
+# Checks if a given choice is a valid number within a given range.
+check_choice() {
+    local choice="$1"
+    local max="$2"
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$max" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# ----------------------------
 # Menu Loop (Step 1)
 # ----------------------------
 
@@ -1031,13 +1071,7 @@ run_message_menu(){
         fi
         choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
         case "$choice" in
-            h)
-                new_body_msg=" Add body if multiple changes or subject is unclear.
-
-    The commit body adds extra context when the subject line isn’t enough. It explains why a change was made, not just what changed. Use it for complex or multi-part changes. Keep it short and clear."
-                continue
-            ;;
-            n)
+            x)
                 exit 1
             ;;
         esac
