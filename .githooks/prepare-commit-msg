@@ -183,7 +183,7 @@ print_tty_indent_5() {
 }
 
 # Displays a colored horizontal line separator spanning the terminal width.
-print_seperator() {
+print_separator() {
     local color="$VIOLET"
     local width char inner line
 
@@ -424,11 +424,19 @@ General rules:
 - Do not output any text before or after the JSON object.
 - Escape all JSON special characters correctly.
 
+IMPORTANT ANALYSIS RULE:
+Before creating the JSON:
+1. Analyze the entire diff.
+2. Identify the single primary change.
+3. Put the primary change into subject.
+4. Put ALL secondary and additional meaningful changes into body.
+5. Never ignore meaningful changes.
+
 JSON field rules:
 - type: The Conventional Commit type.
 - scope: A short logical project area. Never a file path.
-- subject: Only the description part of the commit message. Do not include type or scope.
-- body: Additional explanation describing secondary changes, context, motivation, or important details.
+- subject: Only the description part of the commit message. Contains ONLY the primary change.
+- body: A summary of ALL secondary changes and additional meaningful changes.
 
 Final commit format:
 The application will construct the final commit message as:
@@ -442,14 +450,18 @@ feat(ui): add dark mode support
 
 Do NOT include \"type(scope):\" inside the subject field.
 
-Commit subject rules:
-- Subject must describe the primary purpose of the change.
+Subject rules:
+- Subject describes ONLY the primary purpose of the change.
+- Subject must contain exactly one main change.
 - Maximum subject length: 75 characters.
 - Use imperative verbs:
   add, fix, update, remove, support, prevent, allow, simplify, improve.
 - Base the subject strictly on the diff.
-- Select the most significant change for the subject.
-- Ignore secondary changes in the subject; describe them in the body.
+- Do not include secondary changes in the subject.
+- Do not combine multiple changes using:
+  and
+  or
+  /
 - Describe behavior or outcome, not implementation details.
 - Avoid vague subjects:
   update
@@ -461,17 +473,17 @@ Commit subject rules:
 
 Good:
 {
-  \"type\": \"refactor\",
-  \"scope\": \"hooks\",
-  \"subject\": \"simplify commit message generation\",
-  \"body\": \"Reduced duplication in the commit hook workflow and improved validation handling.\"
+  \"type\": \"feat\",
+  \"scope\": \"api\",
+  \"subject\": \"add webhook support\",
+  \"body\": \"Added request validation.\\nImproved error handling.\\nUpdated API tests.\"
 }
 
 Bad:
 {
-  \"type\": \"refactor\",
-  \"scope\": \".githooks/prepare-commit-msg\",
-  \"subject\": \"Refactor commit message generation logic\",
+  \"type\": \"feat\",
+  \"scope\": \"api\",
+  \"subject\": \"add webhook support and improve validation and tests\",
   \"body\": \"\"
 }
 
@@ -495,8 +507,9 @@ Type selection:
 - cleanup: minor non-functional cleanup.
 
 Classification rules:
-- Classify based on behavior and user impact, not number of changed lines.
-- Multiple changed files do not automatically mean feat.
+- Classify based on behavior and user impact.
+- Number of changed files does not determine the type.
+- Large diffs do not automatically mean feat.
 - New functions do not automatically mean feat.
 - Refactoring does not automatically mean feat.
 - Renaming does not automatically mean feat.
@@ -510,7 +523,7 @@ Classification rules:
 - Choose exactly one type.
 
 Scope rules:
-- Scope must describe the main logical subsystem affected.
+- Scope describes the main logical subsystem affected.
 - Scope must be short and lowercase.
 - Scope must NOT be a file path.
 - Scope must NOT contain:
@@ -520,15 +533,14 @@ Scope rules:
   file extensions
 - Scope must never directly copy a changed file name.
 
-Scope selection rules:
-- Choose the most relevant subsystem when multiple files are changed.
-- Prefer the area where the main behavior change happened.
-- If changes affect multiple unrelated areas, choose the primary area only.
-- Do not create combined scopes like:
-  auth-ui
-  api-hooks
+Scope selection:
+- Choose the area where the primary change happened.
+- If multiple areas are changed, choose the area of the primary change.
+- Do not create combined scopes.
+- Do not use scopes like:
+  api-ui
   frontend-backend
-- Use a broader logical scope when appropriate.
+  auth-hooks
 
 Examples:
 .githooks/prepare-commit-msg -> hooks
@@ -540,7 +552,7 @@ src/api/client.ts -> api
 README.md -> docs
 package.json dependency changes -> deps
 
-Possible scopes include but are not limited to:
+Allowed scopes include:
 hooks
 auth
 api
@@ -570,19 +582,52 @@ return an empty string.
 
 Body rules:
 - Always include the body property.
-- Use an empty string when no explanation is needed.
-- The body may describe multiple related changes.
-- Include secondary changes that are not important enough for the subject.
-- Explain context, motivation, user impact, migration notes, or important decisions.
+- Body MUST contain all secondary changes from the diff.
+- Body MUST summarize every meaningful change not included in subject.
+- Do not only describe the main change.
 - Do not repeat the subject.
 - Do not list changed files.
-- Do not describe low-level implementation details.
-- Keep it concise.
+- Do not copy the diff.
+- Do not describe low-level implementation details unless important for understanding behavior.
 
-Examples of good body content:
-- \"Added validation for configuration files and improved error messages for invalid input.\"
-- \"Updated the API client handling and adjusted related tests to cover the new behavior.\"
-- \"Improved caching behavior and fixed stale data handling during updates.\"
+The body should include when present:
+- additional features
+- additional fixes
+- related refactoring
+- configuration changes
+- test changes
+- documentation changes
+- dependency changes
+- cleanup changes
+- important behavior changes
+
+Multiple changes example:
+
+Diff:
+- Added AI commit generation
+- Added JSON validation
+- Improved error handling
+- Added tests
+- Updated documentation
+
+Correct:
+{
+  \"type\": \"feat\",
+  \"scope\": \"core\",
+  \"subject\": \"add AI commit generation\",
+  \"body\": \"Added JSON validation for generated output.\\nImproved error handling for invalid responses.\\nAdded tests for the new workflow.\\nUpdated documentation.\"
+}
+
+Incorrect:
+{
+  \"type\": \"feat\",
+  \"scope\": \"core\",
+  \"subject\": \"add AI commit generation\",
+  \"body\": \"Added AI commit generation.\"
+}
+
+If the diff contains only one meaningful change:
+- Return an empty string for body.
 
 Body formatting rules:
 - Body may contain escaped \\n characters.
@@ -592,13 +637,13 @@ Body formatting rules:
 
 Correct:
 {
-  \"body\": \"Explains why the change was needed.\\nAdds context for future maintainers.\"
+  \"body\": \"Added validation rules.\\nImproved error handling.\"
 }
 
 Incorrect:
 {
-  \"body\": \"Explains why the change was needed.
-Adds context for future maintainers.\"
+  \"body\": \"Added validation rules.
+Improved error handling.\"
 }
 
 Before producing the answer, silently verify:
@@ -611,8 +656,9 @@ Before producing the answer, silently verify:
 - type is one valid Conventional Commit type.
 - scope is a logical scope, never a path.
 - subject is <= 75 characters.
-- subject does not contain type or scope.
-- body may contain multiple related changes.
+- subject contains only the primary change.
+- body contains all secondary meaningful changes.
+- body is empty only if no secondary changes exist.
 - body contains no carriage returns.
 - body contains no tab characters.
 
@@ -756,7 +802,7 @@ while true; do
     # 🎮 Menu
     # ----------------------------
 
-    print_seperator
+    print_separator
     do_menu
 
     # ----------------------------
@@ -764,7 +810,7 @@ while true; do
     # ----------------------------
 
     echo "" > /dev/tty 
-    print_seperator
+    print_separator
     debug_str=""
 
     # ----------------------------
@@ -846,7 +892,7 @@ while true; do
 
             while true; do
                 clear
-                print_seperator
+                print_separator
                 print_tty "Select Prefix Type (Stored: ${selected_type:-None}):"
                 for i in "${!types[@]}"; do
                     printf "[%2d] %-10s " "$((i+1))" "${types[$i]}" > /dev/tty
@@ -855,7 +901,7 @@ while true; do
                 [ $(( ${#types[@]} % 3 )) -ne 0 ] && print_tty ""
                 print_tty "[M]anual Input  [Q]uit Menu"
                 print_tty "Enter the type for a description of the type"
-                print_seperator
+                print_separator
                 print_tty new_type_msg
                 printf "Choice: " > /dev/tty
                 read -r type_choice < /dev/tty
@@ -908,7 +954,7 @@ while true; do
 
             while true; do
                 clear
-                print_seperator
+                print_separator
                 
                 width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
@@ -1208,19 +1254,19 @@ run_body_menu(){
         clear
 
         print_title
-        print_seperator
+        print_separator
         print_center "Body Menu"
         if [ "$body_time_info" != "" ]; then
             print_center "$body_time_info"
         fi
-        print_seperator
+        print_separator
         if [ "$body_msg" = "" ]; then
             print_center "No Commit Body has been added yet."
         else
             print_multi_line_center "$body_msg"
         fi
             
-        print_seperator
+        print_separator
         menu_items=(
             "[A] Add Body"
             "[E] Edit Body"
@@ -1229,7 +1275,7 @@ run_body_menu(){
             "[H] Help"
         )
         print_menu
-        print_seperator
+        print_separator
         if [ "$body_time_info" != "" ]; then
             print_tty_indent_1 "$new_body_msg"
             new_body_msg=""
@@ -1248,7 +1294,7 @@ run_body_menu(){
                 clear
                 start_t=$SECONDS
                 print_title
-                print_seperator
+                print_separator
                 print_center "Generating commit body message..." > /dev/tty
                 body_msg=$(generate_body)
                 body_msg="$(
@@ -1294,6 +1340,11 @@ confirm_commit_message() {
     local choice
 
     while true; do
+        clear
+        print_title
+        print_separator
+        print_multi_line_center "$NEW_COMMIT"
+        print_separator
         printf "Do you want to use this edited commit message? (Y/N): " > /dev/tty
         read -r choice < /dev/tty
 
@@ -1326,29 +1377,29 @@ run_menu(){
         clear
 
         print_title
-        print_seperator
+        print_separator
         print_center "Subject:" "${YELLOW}"
         print_center "$NEW_TYPE($NEW_SCOPE): $NEW_SUBJECT"
         if [ "$NEW_BODY" != "" ]; then
-            print_seperator
+            print_separator
             print_center "Body:" "${YELLOW}"
             print_multi_line_center "$NEW_BODY" "$RESET" 85
         fi
-        print_seperator
+        print_separator
         menu_items=(
             "[S] Show Changes"
             "[C] Commit"
             "[E] Edit"
             "[R] Remove Body"
             "[D] Debug Info"
-            "[X] Exit without commiting"
+            "[X] Cancel commit"
         )
 
         print_menu
-        print_seperator
+        print_separator
         if [ -n "$new_message_msg" ]; then
             print_tty_indent_1 "$new_message_msg"
-            print_seperator
+            print_separator
             new_message_msg=""
         fi
 
@@ -1375,6 +1426,7 @@ run_menu(){
                 "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2> /dev/tty
 
                 if ! cmp -s "$COMMIT_MSG_FILE" <(printf "%s" "$final_msg"); then
+                    NEW_COMMIT="$(<"$COMMIT_MSG_FILE")"
                     if confirm_commit_message; then
                         printf "Using edited commit message\n" > /dev/tty
                         exit 0
