@@ -272,9 +272,9 @@ build_commit_message() {
     local body_msg="$4"
 
     if [ -z "$body_msg" ]; then
-        printf "%s\n" "$type($scope)$subject"
+        printf "%s\n" "$type($scope):$subject"
     else
-        printf "%s\n\n%s\n" "$type($scope)$subject" "$body_msg"
+        printf "%s\n\n%s\n" "$type($scope):$subject" "$body_msg"
     fi
 }
 
@@ -405,11 +405,11 @@ SUMMARIZED DIFF:
     s|^([+-])[[:space:]]*/\*|\1 COMMENT:|;
 ')
 
-SUBJECT_PROMPT="Generate a Git commit message from the provided diff.
+SUBJECT_PROMPT="Generate a precise Conventional Commit message from the provided git diff.
 
 Return EXACTLY one valid JSON object and nothing else.
 
-JSON schema:
+JSON format:
 {
   \"type\": \"string\",
   \"scope\": \"string\",
@@ -417,144 +417,191 @@ JSON schema:
   \"body\": \"string\"
 }
 
-General rules:
-- Output ONLY valid JSON.
-- Do not output markdown.
-- Do not output explanations.
-- Do not output comments.
-- Do not output code fences.
-- Do not output any text before or after the JSON object.
-- Escape all JSON special characters correctly.
+OUTPUT REQUIREMENTS:
+- Output only JSON.
+- No markdown.
+- No explanations.
+- No comments.
+- No code blocks.
+- No text before or after JSON.
+- Escape JSON characters correctly.
 
-IMPORTANT ANALYSIS RULE:
-Before creating the JSON:
-1. Analyze the entire diff.
-2. Identify the single primary change.
-3. Put the primary change into subject.
-4. Put ALL secondary and additional meaningful changes into body.
-5. Never ignore meaningful changes.
+ANALYSIS PROCESS:
 
-JSON field rules:
-- type: The Conventional Commit type.
-- scope: A short logical project area. Never a file path.
-- subject: Only the description part of the commit message. Contains ONLY the primary change.
-- body: A summary of ALL secondary changes and additional meaningful changes.
+Before creating the JSON, analyze the complete diff.
 
-Final commit format:
-The application will construct the final commit message as:
+Step 1:
+Identify every meaningful change.
+
+Step 2:
+Ignore noise:
+- whitespace-only changes
+- formatting-only changes
+- generated files
+- lockfile changes without dependency impact
+- trivial renames
+- mechanical changes without behavioral impact
+
+Step 3:
+Classify changes:
+
+PRIMARY CHANGE:
+- The single most important purpose of the commit.
+- Goes into subject.
+
+SECONDARY CHANGES:
+- All other meaningful changes.
+- Go into body.
+
+IMPORTANT:
+- Never omit meaningful secondary changes.
+- Never reduce multiple changes into a vague summary.
+- Never invent changes not present in the diff.
+
+JSON FIELD RULES:
+
+type:
+- The Conventional Commit type.
+
+scope:
+- The logical subsystem affected by the primary change.
+- Scope is mandatory.
+- Never return an empty scope.
+
+subject:
+- Only the primary change description.
+- Do not include type or scope.
+
+body:
+- All meaningful secondary changes.
+- Do not repeat the subject.
+
+COMMIT FORMAT:
+
+The application creates:
 
 type(scope): subject
 
 Examples:
-refactor(hooks): simplify commit message generation
-fix(auth): handle expired session tokens
-feat(ui): add dark mode support
 
-Do NOT include \"type(scope):\" inside the subject field.
-
-Subject rules:
-- Subject describes ONLY the primary purpose of the change.
-- Subject must contain exactly one main change.
-- Maximum subject length: 75 characters.
-- Use imperative verbs:
-  add, fix, update, remove, support, prevent, allow, simplify, improve.
-- Base the subject strictly on the diff.
-- Do not include secondary changes in the subject.
-- Do not combine multiple changes using:
-  and
-  or
-  /
-- Describe behavior or outcome, not implementation details.
-- Avoid vague subjects:
-  update
-  improve
-  cleanup
-  fix issue
-- Do not repeat the type in the subject.
-- Do not start the subject with a capital letter unless required.
-
-Good:
 {
-  \"type\": \"feat\",
-  \"scope\": \"api\",
-  \"subject\": \"add webhook support\",
-  \"body\": \"Added request validation.\\nImproved error handling.\\nUpdated API tests.\"
+  \"type\": \"fix\",
+  \"scope\": \"auth\",
+  \"subject\": \"prevent expired token failures\",
+  \"body\": \"Added token refresh handling.\\nImproved authentication error messages.\\nAdded tests for expired sessions.\"
 }
 
-Bad:
-{
-  \"type\": \"feat\",
-  \"scope\": \"api\",
-  \"subject\": \"add webhook support and improve validation and tests\",
-  \"body\": \"\"
-}
+TYPE SELECTION:
 
-Type selection:
-- feat: new user-visible functionality.
-- fix: correction of incorrect behavior.
-- refactor: internal restructuring without behavior changes.
-- style: formatting, whitespace, linting, or style only.
-- docs: documentation-only changes.
-- test: tests only.
-- perf: performance improvements.
-- chore: maintenance, tooling, configuration, or housekeeping.
-- release: release changes.
-- remove: removal of functionality, code, or files.
-- build: build system or dependency changes.
-- ci: CI/CD changes.
-- security: security-related improvements.
-- i18n: internationalization or localization.
-- deps: dependency updates.
-- ui: user interface changes.
-- cleanup: minor non-functional cleanup.
+Choose exactly one type.
 
-Classification rules:
-- Classify based on behavior and user impact.
-- Number of changed files does not determine the type.
-- Large diffs do not automatically mean feat.
-- New functions do not automatically mean feat.
-- Refactoring does not automatically mean feat.
-- Renaming does not automatically mean feat.
-- Formatting does not automatically mean feat.
-- Comments do not imply behavior changes.
-- Documentation does not imply functionality changes.
-- If behavior does not change, prefer:
-  refactor, chore, style, docs, cleanup, deps.
-- If user-visible functionality is added, use feat.
-- If incorrect behavior is corrected, use fix.
-- Choose exactly one type.
+feat:
+- New user-visible or developer-visible functionality.
 
-Scope rules:
-- Scope describes the main logical subsystem affected.
-- Scope must be short and lowercase.
-- Scope must NOT be a file path.
-- Scope must NOT contain:
+fix:
+- Incorrect behavior correction.
+
+refactor:
+- Internal restructuring without behavior changes.
+
+style:
+- Formatting, whitespace, linting.
+
+docs:
+- Documentation changes only.
+
+test:
+- Test changes only.
+
+perf:
+- Performance improvements.
+
+chore:
+- Maintenance, tooling, configuration.
+
+build:
+- Build system changes.
+
+ci:
+- CI/CD changes.
+
+security:
+- Security improvements.
+
+deps:
+- Dependency changes.
+
+remove:
+- Removing functionality.
+
+release:
+- Release-related changes.
+
+i18n:
+- Localization changes.
+
+ui:
+- User interface changes.
+
+cleanup:
+- Non-functional cleanup.
+
+TYPE DECISION RULES:
+
+- Added behavior -> feat.
+- Fixed behavior -> fix.
+- Changed internal structure only -> refactor.
+- No behavior change -> prefer:
+  refactor, docs, style, test, chore, cleanup, deps.
+- Do not use feat only because code was added.
+- Do not use refactor when behavior changed.
+
+SCOPE RULES:
+
+Scope is mandatory.
+
+Scope requirements:
+- Always select a scope.
+- Scope represents the main subsystem affected.
+- Scope must be lowercase.
+- Scope must be short.
+- Scope must not be empty.
+- Scope must not be a file path.
+- Scope must not contain:
   dots
   slashes
   filenames
-  file extensions
-- Scope must never directly copy a changed file name.
+  extensions
+  special characters
 
-Scope selection:
-- Choose the area where the primary change happened.
-- If multiple areas are changed, choose the area of the primary change.
-- Do not create combined scopes.
-- Do not use scopes like:
+If multiple areas changed:
+- Select the scope of the primary change.
+- Never combine scopes.
+- Never create scopes like:
   api-ui
-  frontend-backend
   auth-hooks
+  frontend-backend
+
+Scope selection priority:
+1. Use the direct feature area.
+2. Use the technical subsystem.
+3. Use a broader meaningful category if unclear.
 
 Examples:
-.githooks/prepare-commit-msg -> hooks
+
 .githooks/* -> hooks
-.github/workflows/build.yml -> ci
-src/auth/login.ts -> auth
-src/components/Button.tsx -> ui
-src/api/client.ts -> api
+.github/workflows/* -> ci
+src/auth/* -> auth
+src/api/* -> api
+src/components/* -> ui
 README.md -> docs
 package.json dependency changes -> deps
+shared utilities -> core
+configuration changes -> config
+unknown project-wide changes -> core
 
-Allowed scopes include:
+Allowed scopes:
+
 hooks
 auth
 api
@@ -575,24 +622,72 @@ logging
 cache
 storage
 network
-performance
 validation
 release
 
-If no meaningful logical scope exists:
-return an empty string.
+SUBJECT RULES:
 
-Body rules:
-- Always include the body property.
-- Body MUST contain all secondary changes from the diff.
-- Body MUST summarize every meaningful change not included in subject.
-- Do not only describe the main change.
-- Do not repeat the subject.
-- Do not list changed files.
-- Do not copy the diff.
-- Do not describe low-level implementation details unless important for understanding behavior.
+Subject must:
+- Describe only the primary change.
+- Use imperative mood.
+- Start lowercase unless required.
+- Be maximum 75 characters.
+- Describe the result or behavior.
+- Not contain type.
+- Not contain scope.
+- Not contain multiple changes.
 
-The body should include when present:
+Good:
+
+\"add webhook validation\"
+
+Bad:
+
+\"add webhook validation and improve API error handling\"
+
+BODY RULES:
+
+Body must:
+- Always exist.
+- Contain all meaningful secondary changes.
+- Have no maximum number of entries.
+- Include 1, 2, 3, 4, 5 or more changes when needed.
+- Not stop after the first secondary change.
+- Not repeat the subject.
+
+Each secondary change:
+- Must be a separate sentence.
+- Must describe one meaningful change.
+- Must use escaped \\n between changes.
+
+Example:
+
+Diff:
+- Added AI commit generation.
+- Added JSON validation.
+- Improved API errors.
+- Added tests.
+- Updated documentation.
+
+Correct:
+
+{
+  \"type\": \"feat\",
+  \"scope\": \"core\",
+  \"subject\": \"add AI commit generation\",
+  \"body\": \"Added JSON validation.\\nImproved API error handling.\\nAdded tests.\\nUpdated documentation.\"
+}
+
+Incorrect:
+
+{
+  \"type\": \"feat\",
+  \"scope\": \"core\",
+  \"subject\": \"add AI commit generation\",
+  \"body\": \"Improved validation and testing.\"
+}
+
+BODY MUST INCLUDE:
 - additional features
 - additional fixes
 - related refactoring
@@ -600,69 +695,51 @@ The body should include when present:
 - test changes
 - documentation changes
 - dependency changes
-- cleanup changes
-- important behavior changes
+- important cleanup
 
-Multiple changes example:
+BODY MUST NOT INCLUDE:
+- file lists
+- filenames
+- line numbers
+- raw diff content
+- trivial formatting changes
+- meaningless implementation details
 
-Diff:
-- Added AI commit generation
-- Added JSON validation
-- Improved error handling
-- Added tests
-- Updated documentation
+FACTUAL RULES:
 
-Correct:
-{
-  \"type\": \"feat\",
-  \"scope\": \"core\",
-  \"subject\": \"add AI commit generation\",
-  \"body\": \"Added JSON validation for generated output.\\nImproved error handling for invalid responses.\\nAdded tests for the new workflow.\\nUpdated documentation.\"
-}
+- Only mention changes visible in the diff.
+- Never invent motivation.
+- Never assume user impact.
+- Never add information not supported by the diff.
 
-Incorrect:
-{
-  \"type\": \"feat\",
-  \"scope\": \"core\",
-  \"subject\": \"add AI commit generation\",
-  \"body\": \"Added AI commit generation.\"
-}
+BODY FORMATTING:
 
-If the diff contains only one meaningful change:
-- Return an empty string for body.
-
-Body formatting rules:
 - Body may contain escaped \\n characters.
 - Body must not contain carriage returns.
 - Body must not contain tab characters.
 - Never output literal line breaks inside JSON strings.
 
-Correct:
-{
-  \"body\": \"Added validation rules.\\nImproved error handling.\"
-}
+FINAL VALIDATION:
 
-Incorrect:
-{
-  \"body\": \"Added validation rules.
-Improved error handling.\"
-}
+Before returning JSON verify:
 
-Before producing the answer, silently verify:
 - Output is valid JSON.
 - Keys are exactly:
   type
   scope
   subject
   body
-- type is one valid Conventional Commit type.
-- scope is a logical scope, never a path.
-- subject is <= 75 characters.
+
+- type is a valid Conventional Commit type.
+- scope exists.
+- scope is not empty.
+- scope is a logical subsystem.
 - subject contains only the primary change.
-- body contains all secondary meaningful changes.
-- body is empty only if no secondary changes exist.
+- subject is <= 75 characters.
+- body contains all meaningful secondary changes.
+- body contains no invented information.
+- body contains no tabs.
 - body contains no carriage returns.
-- body contains no tab characters.
 
 Return ONLY the JSON object."
 
@@ -1348,7 +1425,7 @@ confirm_commit_message() {
         print_multi_line_center "$NEW_COMMIT"
         print_separator
         echo ""
-        printf "Do you want to commit this message? (Y/N): " > /dev/tty
+        printf "Do you want to commit this message? (Y/N/B[Back to Editor]): " > /dev/tty
         read -r choice < /dev/tty
 
         case "$choice" in
@@ -1358,8 +1435,11 @@ confirm_commit_message() {
             [Nn])
                 return 1
                 ;;
+            [Bb])
+                return 2
+                ;;
             *)
-                printf "Please answer Y or N.\n" > /dev/tty
+                printf "Please answer Y,N or B.\n" > /dev/tty
                 ;;
         esac
     done
@@ -1426,18 +1506,22 @@ run_menu(){
                 final_msg=$(build_commit_message "$NEW_TYPE" "$NEW_SCOPE" "$NEW_SUBJECT" "$NEW_BODY")
                 printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
 
-                "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2> /dev/tty
+                while true; do
+                    "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2> /dev/tty
 
-                if ! cmp -s "$COMMIT_MSG_FILE" <(printf "%s" "$final_msg"); then
-                    NEW_COMMIT="$(<"$COMMIT_MSG_FILE")"
-                    if confirm_commit_message; then
-                        printf "Using edited commit message\n" > /dev/tty
-                        exit 0
-                    else
-                        continue
+                    if ! cmp -s "$COMMIT_MSG_FILE" <(printf "%s" "$final_msg"); then
+                        NEW_COMMIT="$(<"$COMMIT_MSG_FILE")"
+                        confirm_return=$(confirm_commit_message);
+                        if [ "$confirm_return" -eq 0 ]; then
+                            printf "Using edited commit message\n" > /dev/tty
+                            exit 0
+                        elif [ "$confirm_return" -eq 1 ]; then
+                            continue 2;
+                        elif [ "$confirm_return" -eq 2 ]; then
+                            continue
+                        fi
                     fi
-                fi
-                continue
+                done
             ;;
             s)
                 clear
