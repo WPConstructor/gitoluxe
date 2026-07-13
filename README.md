@@ -1,142 +1,197 @@
-# WPConstructor Git AI 🚀
+# Gitoluxe
 
-An AI-powered Git commit assistant using local LLMs (Ollama) to generate conventional commit messages directly inside Git hooks.
+AI-powered Git commit automation running locally and keeping your code private.
 
-It enhances your workflow by analyzing staged changes and suggesting structured commit messages with interactive approval, editing, and diff inspection.
+Gitoluxe uses local AI models such as **Qwen2.5-Coder 7B or 3B** through Ollama to generate meaningful Git commit messages from your code changes. Since the AI runs locally, your source code and diffs never leave your machine.
 
-## ✨ Features
+## Features
 
-- 🧠 AI-generated conventional commit messages (feat, fix, chore, etc.)
-- ⚡ Local inference via Ollama (no cloud required)
-- 👀 Interactive commit menu:
-  - Accept AI message
-  - Add body suggestion (detailed commit explanation)
-  - Edit AI message
-  - Manual commit
-  - Show staged changes
-- 🔁 Generate up to 20 AI suggestions without leaving the menu
-- 🔒 Safe Git hook execution (no blocking or corruption)
-- 🧩 Scope detection (githooks, cli, ai, installer, etc.)
-- 📦 Lightweight installation script
+- 🤖 **Local AI commit messages**
+  - Uses Qwen2.5-Coder models locally.
+  - No cloud APIs.
+  - Your code stays private.
 
-## 🧠 How it works
+- 🔒 **Privacy focused**
+  - Code changes are analyzed only on your own computer.
+  - No external services required.
 
-The system hooks into Git’s `prepare-commit-msg` process:
+- ⚙️ **Global Git integration**
+  - Installs into your home directory.
+  - Configures Git hooks globally.
+  - Works automatically across your repositories.
 
-1. Captures staged changes (`git diff --cached`)
-2. Sends diff to local LLM (Ollama)
-3. Generates a conventional commit message
-4. Shows interactive menu
-5. User selects action:
-   - Accept 1-x → writes commit message
-   - Add 5 suggestions
-   - Create / Recreate Body
-   - Remove Body
-   - Show Changes → displays diff
-   - Edit 1-x → opens editor
-   - Manual → empty editor
+- ✍️ **AI-assisted commits**
+  - Generates Conventional Commit messages.
+  - Creates structured commit messages from your diff.
+  - Helps keep commit history clean and consistent.
 
-## 🎮 Usage
+- ⚠️ **Main branch protection**
+  - Detects commits directly to `main`.
+  - Warns before committing because direct commits to main may not be desired.
 
-After installation:
+- 🚀 **Pre-push checks**
+  - Adds Git pre-push integration.
+  - Runs `repoluxe.sh` from your repository before pushing.
+  - Supports checks before pushing normal commits or tags.
+
+## How It Works
 
 ```
-git add -A
-git commit -m ""
+Git commit
+    |
+    v
+Gitoluxe
+    |
+    v
+Local Qwen2.5-Coder model
+    |
+    v
+Generated commit message
 ```
 
-You will see:
+Before pushing:
 
-- AI-generated commit messages
-- Interactive menu
+```
+git push
+    |
+    v
+pre-push hook
+    |
+    v
+./repoluxe.sh
+    |
+    v
+Push allowed or blocked
+```
+
+## Requirements
+
+- Git
+- Ollama
+- A supported local model:
+  - `qwen2.5-coder:7b`
+  - `qwen2.5-coder:3b`
+
+Install Ollama:
+
+https://ollama.com
+
+Download a model:
+
+```
+ollama pull qwen2.5-coder:7b
+```
+
+## Installation
+
+Clone the repository:
+
+```
+git clone https://github.com/wpconstructor/gitoluxe.git
+cd gitoluxe
+```
+
+Install:
+
+```
+./install.sh
+```
+
+Gitoluxe installs itself into your home directory and configures global Git hooks.
+
+## Usage
+
+After installation, use Git normally:
+
+```
+git add .
+git commit
+```
+
+Gitoluxe analyzes your changes and generates a commit message.
+
+You can edit the generated message before committing.
+
+## Commit Example
+
+Generated output:
+
+```
+feat(api): add webhook validation
+
+Added request validation.
+Improved API error handling.
+Added integration tests.
+```
+
+## Repository Pre-Push Checks
+
+To add custom checks for a repository, create:
+
+```
+repoluxe.sh
+```
 
 Example:
 
 ```
-==============================
-🧠 AI Suggested Commit:
-==============================
-[1] refactor(githooks): clean up and standardize prepare-commit-msg script
-[2] refactor(githooks): clean up prepare-commit-msg script
-[3] fix(githooks): remove unnecessary backticks and formatting from commit body
-[4] refactor(githooks): clean up prepare-commit-msg script
-[5] refactor(githooks): clean up and optimize prepare-commit-msg script
+#!/bin/bash
 
-No body
-==============================
+echo "Running pre-push checks..."
 
-Accept [1-5], [A]dd 5 suggestions, Create/Recreate [B]ody, [S]how Changes, Edit [E1-E5], [M]anual
+npm test
+npm run lint
 ```
 
-## 🔁 Menu Options
-
-- **1-x**   → Accept AI commit message
-- **A**     → Add 5 suggestions
-- **B**     → Create/Recreate body
-- **R**     → Remove body
-- **S**     → Show staged diff
-- **E1-Ex** → Edit AI suggestion
-- **M**     → Write manual commit message
-
-## 🧠 Conventional Commit Style
-
-The AI follows:
+Make it executable:
 
 ```
-type(scope): description
+chmod +x repoluxe.sh
 ```
 
-Types:
+Gitoluxe executes it before pushing.
 
-- feat → new feature
-- fix → bug fix
-- chore → maintenance
-- refactor → code restructuring
-- docs → documentation
-- test → tests
-- ci → CI/CD changes
-- build → build system changes
+## Privacy
 
-## ⚠️ Notes
+Gitoluxe is designed for private development workflows.
 
-- This tool runs locally using Ollama
-- No external API calls are required
-- Large diffs are truncated for performance
-- Uses `qwen2.5-coder:7b` model
+Your:
 
-## 🧪 Example Output
+- source code
+- git diff
+- commit context
 
-```
-feat(cli): add interactive commit selection menu
-```
+stay on your machine and are processed by your local Ollama model.
+
+No external AI service is required.
+
+## Configuration
+
+Gitoluxe uses local configuration and Git hooks.
+
+Supported models:
 
 ```
-fix(ai): handle empty diff generation safely
+qwen2.5-coder:7b
+qwen2.5-coder:3b
 ```
 
-```
-chore(githooks): improve commit hook stability
-```
+Smaller models provide faster generation.
+Larger models provide more detailed commit messages.
 
-## 📁 Project Structure
+## Why Gitoluxe?
 
-```
-.githooks/
-  prepare-commit-msg
+Modern AI coding tools are powerful, but many require sending code to external servers.
 
-install.sh
-README.md
-LICENSE.md
-```
+Gitoluxe provides:
 
-## ⚖️ License
+- local AI
+- private code analysis
+- automated commits
+- better Git workflows
 
-This project is licensed under the MIT License.
+without leaving your development environment.
 
-See the full license text here:  
-👉 [LICENSE.md](LICENSE.md)
+## License
 
-## 🧑‍💻 Author
-
-Built by WPConstructor  
-[Contact WPConstructor](https://wpconstructor.com/contact/)
+See the LICENSE file for details.
