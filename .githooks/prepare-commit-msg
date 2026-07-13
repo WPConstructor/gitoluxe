@@ -394,7 +394,7 @@ Scope rules:
 - Omit the scope if it is unclear.
 - Do not use generic scopes like \"misc\", \"general\", or \"code\".
 
-create_body:
+The add_body_message:
 - Set to true when the commit contains multiple unrelated changes, changes across different areas/components, or requires additional context beyond the subject line.
 - Set to false when the commit contains a single focused change that can be fully described by the subject line.
 
@@ -452,7 +452,7 @@ Supports regenerating or editing suggestions."
 
 # Generates the commit message body using Ollama.
 generate_body() {
-    printf "%s" "$diff_payload" | OLLAMA_KEEP_ALIVE=30m ollama run qwen2.5-coder:7b "$BODY_PROMPT"
+    printf "%s" "$diff_payload" | OLLAMA_KEEP_ALIVE=30m ollama run qwen-commit "$BODY_PROMPT"
 }
 
 # Gets the description for a given conventional commit type.
@@ -866,9 +866,9 @@ generate_subject() {
       "type":{"type":"string"},
       "scope":{"type":"string"},
       "description":{"type":"string"},
-      "create_body":{"type":"boolean"}
+      "add_body_message":{"type":"boolean"}
     },
-    "required":["type","description","create_body"],
+    "required":["type","description","add_body_message"],
     "additionalProperties":false
   }' \
   qwen-commit \
@@ -927,7 +927,7 @@ fix_json_control_chars_2() {
 }
 
 # Generates a batch of commit message suggestions and sorts them longest first.
-generate_batch() {
+generate() {
     local start=$1
     local end=$2
     local idx=$start
@@ -936,7 +936,7 @@ generate_batch() {
     print_title
     echo ""
 
-    print_center "Generating commit subject message suggestions..."
+    print_center "Generating commit subject message..."
 
     while [ "$idx" -le "$end" ]; do
         json_msg=$(generate_subject)
@@ -946,11 +946,12 @@ generate_batch() {
         #printf '%s\n' "$json_msg"
         #press_continue
         msg=$(printf '%s' "$json_msg" | jq -r '.description')
-        create_body=$(printf '%s' "$json_msg" | jq -r '.create_body')
-        if [ "$create_body" = "true" ]; then
-            echo "Create body"
+        add_body_message=$(printf '%s' "$json_msg" | jq -r '.add_body_message')
+        if [ "$add_body_message" = "true" ]; then
+            print_center "Generating commit body message..."
+            body_msg=$(generate_body)
         else
-            echo "No body needed"
+            print_center "No body needed"
         fi
         press_continue
         #printf '%s\n' "$msg"
@@ -987,7 +988,7 @@ add_message_suggestions(){
     start_idx=$((total_ai_msg - MSGS_ADD -1))
     [ "$start_idx" -lt 1 ] && start_idx=1
 
-    generate_batch "$start_idx" "$total_ai_msg"
+    generate "$start_idx" "$total_ai_msg"
 
     # Extract scopes from generated commit messages and collect unique scopes
     for i in $(seq "$start_idx" "$total_ai_msg"); do
@@ -1220,10 +1221,15 @@ run_main_menu(){
         fi
         print_seperator
         print_messages
+        if [ "$body_msg" != "" ]; then
+            print_seperator
+            print_center "Body:"
+            print_multi_line_center "$body_msg"
+        fi
         print_seperator
         menu_items=(
-            "[C] Show Changes"
-            "[1-5] Choose Suggestion"
+            "[S] Show Changes"
+            "[C] Commit"
             "[E1-E5] Edit and Choose Suggestion"
             "[A] Add Suggestions"
             "[B] Body Menu"
