@@ -266,13 +266,15 @@ print_menu() {
 
 # Constructs the final commit message from a subject and an optional body.
 build_commit_message() {
-    local subject="$1"
-    local body_msg="$2"
+    local type="$1"
+    local scope="$2"
+    local subject="$3"
+    local body_msg="$4"
 
     if [ -z "$body_msg" ]; then
-        printf "%s\n" "$subject"
+        printf "%s\n" "$type($scope)$subject"
     else
-        printf "%s\n\n%s\n" "$subject" "$body_msg"
+        printf "%s\n\n%s\n" "$type($scope)$subject" "$body_msg"
     fi
 }
 
@@ -1416,12 +1418,12 @@ run_menu(){
         choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
         case "$choice" in
             c)
-                final_msg=$(build_commit_message "$NEW_SUBJECT" "$NEW_BODY")
+                final_msg=$(build_commit_message "$NEW_TYPE" "$NEW_SCOPE" "$NEW_SUBJECT" "$NEW_BODY")
                 printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
                 exit 0
             ;;
             e)
-                final_msg=$(build_commit_message "$NEW_SUBJECT" "$NEW_BODY")
+                final_msg=$(build_commit_message "$NEW_TYPE" "$NEW_SCOPE" "$NEW_SUBJECT" "$NEW_BODY")
                 printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
 
                 "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2> /dev/tty
