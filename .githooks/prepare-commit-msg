@@ -1345,7 +1345,8 @@ confirm_commit_message() {
         print_separator
         print_multi_line_center "$NEW_COMMIT"
         print_separator
-        printf "Do you want to use this edited commit message? (Y/N): " > /dev/tty
+        echo ""
+        printf "Do you want to commit this message? (Y/N): " > /dev/tty
         read -r choice < /dev/tty
 
         case "$choice" in
