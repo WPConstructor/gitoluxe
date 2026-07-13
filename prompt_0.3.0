@@ -1,0 +1,161 @@
+SUBJECT_PROMPT="Generate a Git commit message from the provided diff.
+
+Return EXACTLY one valid JSON object and nothing else.
+
+JSON schema:
+{
+  \"type\": \"string\",
+  \"scope\": \"string\",
+  \"description\": \"string\",
+  \"body\": \"string\"
+}
+
+General rules:
+- Output ONLY valid JSON.
+- Do not output markdown.
+- Do not output explanations.
+- Do not output comments.
+- Do not output code fences.
+- Do not output ANSI escape sequences.
+- Do not output terminal control codes.
+- Do not output any text before or after the JSON object.
+- Escape all JSON special characters correctly.
+
+Commit subject rules:
+- Type format: type.
+- Scope format: (scope).
+- Description is concise and imperative.
+- Maximum description length: 75 characters.
+- Use imperative verbs such as \"add\", \"fix\", \"update\", \"remove\", \"support\", \"prevent\", \"allow\".
+- Describe the primary purpose of the change.
+- Base the description strictly on the diff.
+- Choose only the single most significant change.
+- Ignore secondary changes; they belong in the body.
+- Describe observable behavior or outcome, not implementation details.
+- Avoid vague descriptions like \"update\", \"cleanup\", or \"fix issue\" without context.
+
+Type selection:
+- feat: new user-visible functionality.
+- fix: incorrect behavior corrected.
+- refactor: internal restructuring without behavior changes.
+- style: formatting or whitespace only.
+- docs: documentation only.
+- test: tests only.
+- perf: performance improvements.
+- chore: maintenance or tooling.
+- release: release changes.
+- remove: removal of functionality or files.
+- build: build system or dependencies.
+- ci: CI/CD.
+- security: security improvements.
+- i18n: localization.
+- deps: dependency updates.
+- ui: visual/UI changes.
+- cleanup: minor non-functional cleanup.
+
+Classification rules:
+- Classify by behavior, not code volume.
+- New functions do not automatically mean feat.
+- Refactoring does not automatically mean feat.
+- Renaming does not automatically mean feat.
+- Formatting does not automatically mean feat.
+- Documentation does not automatically mean feat.
+- If behavior does not change, prefer refactor, chore, style, docs, cleanup, or deps.
+- If user-visible functionality is added, use feat.
+- If incorrect behavior is corrected, use fix.
+- Choose exactly one type.
+
+Scope rules:
+- Infer scope from the affected module, component, feature, or directory.
+- Use a short lowercase scope.
+- Use existing project terminology when possible.
+- Omit the scope by returning an empty string if unclear.
+- Never use generic scopes like \"misc\", \"general\", or \"code\".
+
+Body rules:
+- Always include the \"body\" property.
+- If no additional explanation is needed, set \"body\" to \"\".
+- Otherwise explain the reason, context, or user impact.
+- Do not repeat the description.
+- Do not describe implementation details.
+- Do not list changed files.
+- Keep it concise.
+
+CRITICAL FORMATTING RULES
+
+The values of BOTH \"description\" and \"body\" MUST each be a single JSON string.
+
+The \"description\" value:
+- MUST be 75 characters or fewer.
+
+The \"body\" value:
+- MUST NOT contain newline characters.
+- MUST NOT contain carriage returns.
+- MUST NOT contain tab characters.
+- MUST be a single paragraph.
+- If multiple ideas are needed, separate them with \". \" instead of line breaks.
+- Never output \"\n\", \"\r\", or \"\t\" inside the string.
+- Never output literal line breaks inside the string.
+
+Incorrect:
+
+{
+  \"body\": \"First sentence.
+Second sentence.\"
+}
+
+Incorrect:
+
+{
+  \"body\": \"First sentence.\\nSecond sentence.\"
+}
+
+Correct:
+
+{
+  \"body\": \"First sentence. Second sentence.\"
+}
+
+Before producing your answer, silently verify:
+- The output is valid JSON.
+- The JSON contains exactly the keys:
+  - type
+  - scope
+  - description
+  - body
+- description is no more than 75 characters.
+- body contains no newline characters.
+- body contains no carriage returns.
+- body contains no tab characters.
+- Every JSON string value occupies a single line.
+
+Return ONLY the JSON object.\"
+
+BODY_PROMPT=\"Generate only the Git commit body.
+
+Rules:
+- Plain text only.
+- No subject line.
+- No commit type.
+- No markdown, bullets, JSON, code blocks, emojis, or explanations.
+- Output only the body.
+
+Interpretation:
+- .md files are documentation, not source code.
+- Describe documentation changes as documentation changes.
+- Comments provide context but do not imply behavior changes.
+- Do not infer features from comments, labels, annotations, formatting, or documentation.
+- Behavior changes come only from executable code changes.
+
+Format:
+- First line: concise summary of what changed and why.
+- Up to 4 additional lines with important details.
+- Focus on behavior, user impact, and key changes.
+- Ignore minor refactors unless they affect behavior.
+
+Example:
+
+Adds interactive commit selection to improve workflow
+
+Allows reviewing AI-generated commit messages before use.
+Supports regenerating or editing suggestions."

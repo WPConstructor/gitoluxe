@@ -10,14 +10,33 @@ REQUIRED_GB=6
 # Maximum number of characters allowed in a commit message prompt/input
 MAX_CHARS=7000
 
-# Enable performance/debug output (1 = on, 0 = off)
-SHOW_PERFORMANCE_INFO=1
-
 # Maximum number of AI-generated commit message suggestions stored
 MAX_AI_MSGS=20
 
 # Number of new AI suggestions generated per batch
 MSGS_ADD=1
+
+# ============================
+# Common Variables
+# ============================
+
+RED=$'\033[31m'
+GREEN=$'\033[32m'
+#YELLOW=$'\033[93m'
+VIOLET=$'\033[38;5;129m'
+YELLOW=$'\033[38;5;226m'
+RESET=$'\033[0m'
+BLACK=$'\033[30m'
+ORANGE=$'\033[38;5;208m'
+
+BG_BLACK=$'\033[40m'
+BG_RED=$'\033[41m'
+BG_GREEN=$'\033[42m'
+BG_YELLOW=$'\033[103m'
+BG_BLUE=$'\033[44m'
+BG_MAGENTA=$'\033[45m'
+BG_CYAN=$'\033[46m'
+BG_WHITE=$'\033[47m'
 
 # ============================
 # Common Functions 
@@ -33,9 +52,11 @@ press_continue(){
     printf "\n" > /dev/tty
 }
 
-# Displays the ASCII art title.
+# Displays the ASCII art title with color.
 print_title() {
-    local width line trimmed pad
+    local color="$VIOLET"
+    local version_color="$WHITE"
+    local width line trimmed pad current_color
 
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
@@ -50,8 +71,20 @@ print_title() {
         pad=$(( (width - ${#trimmed}) / 2 ))
         [ "$pad" -lt 0 ] && pad=0
 
-        # print centered line to tty
-        printf "%*s%s\n" "$pad" "" "$trimmed" > /dev/tty
+        # Use white for version line
+        if [[ "$line" == v1.* ]]; then
+            current_color="$version_color"
+        else
+            current_color="$color"
+        fi
+
+        # print centered line with color
+        printf "%*s%b%s%b\n" \
+            "$pad" "" \
+            "$current_color" \
+            "$trimmed" \
+            "\033[0m" > /dev/tty
+
     done << 'EOF'
   ________.__  __         .__                       
  /  _____/|__|/  |_  ____ |  |  __ _____  ___ ____  
@@ -59,45 +92,68 @@ print_title() {
 \    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
  \______  /__||__|  \____/|____/____//__/\_ \\___  >
         \/                                 \/    \/ 
-v1.0.0 (c) 2026 by WPConstructor - License MIT
+v1.0.0 (c) 2026 by WPConstructor - MIT License
 EOF
 }
 
-# prints a text in the middle of the window
+# prints a colored text in the middle of the window
 print_center() {
     local text="$1"
+    local color="$2"
     local width cols padding
 
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
-    # strip ANSI escape codes (optional safety)
     cols=${#text}
 
     padding=$(( (width - cols) / 2 ))
     [ "$padding" -lt 0 ] && padding=0
 
-    printf "%*s%s\n" "$padding" "" "$text" > /dev/tty
+    printf "%*s%b%s%b\n" \
+        "$padding" "" "$color" "$text" "\033[0m" > /dev/tty
 }
 
-# Prints a multi-line text centered as one block.
+# Prints a colored multi-line text centered as one block with word wrapping.
 print_multi_line_center() {
     local text="$1"
-    local width longest=0 padding line
+    local color="$2"
+    local max_width="$3"
+    local width longest=0 padding line wrapped
 
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
-    # Find longest line
+    # Use provided max width or calculate from terminal width
+    if [ -z "$max_width" ]; then
+        max_width=$((width - 4))
+    fi
+
+    # Limit max width to terminal width
+    if [ "$max_width" -gt "$width" ]; then
+        max_width=$((width - 4))
+    fi
+
+    [ "$max_width" -lt 1 ] && max_width=1
+
+    # Wrap long lines
+    wrapped=$(printf '%s' "$text" | fold -s -w "$max_width")
+
+    # Find longest wrapped line
     while IFS= read -r line; do
         [ ${#line} -gt "$longest" ] && longest=${#line}
-    done <<< "$text"
+    done <<< "$wrapped"
 
+    # Calculate left padding for centering
     padding=$(( (width - longest) / 2 ))
     [ "$padding" -lt 0 ] && padding=0
 
-    # Print all lines with the same padding
+    # Print all wrapped lines centered with color
     while IFS= read -r line; do
-        printf "%*s%s\n" "$padding" "" "$line" > /dev/tty
-    done <<< "$text"
+        printf "%*s%b%s%b\n" \
+            "$padding" "" \
+            "$color" \
+            "$line" \
+            "\033[0m" > /dev/tty
+    done <<< "$wrapped"
 }
 
 # Prints a message to the TTY, wrapped to the terminal width.
@@ -126,8 +182,9 @@ print_tty_indent_5() {
         > /dev/tty
 }
 
-# Displays a horizontal line separator spanning the terminal width.
+# Displays a colored horizontal line separator spanning the terminal width.
 print_seperator() {
+    local color="$VIOLET"
     local width char inner line
 
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
@@ -140,7 +197,7 @@ print_seperator() {
     printf -v line '%*s' "$inner" ''
     line=${line// /$char}
 
-    printf " %s \n" "$line" > /dev/tty
+    printf "%b %s %b\n" "$color" "$line" "\033[0m" > /dev/tty
 }
 
 # ----------------------------
@@ -153,30 +210,28 @@ print_menu() {
 
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
-    # find max columns based on typical width
     cols=$(( width / 20 ))
     [ "$cols" -lt 1 ] && cols=1
 
-    # find max per column
     declare -a col_max
 
     for ((i=0; i<cols; i++)); do
         col_max[i]=0
     done
 
+    # Calculate widths without ANSI codes
     for i in "${!menu_items[@]}"; do
         col=$(( i % cols ))
         len=${#menu_items[i]}
         [ "$len" -gt "${col_max[col]}" ] && col_max[col]=$len
     done
 
-    # compute total width
     local row_width=0
     for ((i=0; i<cols; i++)); do
         row_width=$(( row_width + col_max[i] + 2 ))
     done
 
-    pad=$(( (width - row_width) / 2 + 1))
+    pad=$(( (width - row_width) / 2 + 1 ))
     [ "$pad" -lt 0 ] && pad=0
 
     i=0
@@ -185,7 +240,13 @@ print_menu() {
 
         for ((j=0; j<cols; j++)); do
             if [ $((i + j)) -lt ${#menu_items[@]} ]; then
-                printf -v cell "%-*s" "${col_max[j]}" "${menu_items[i+j]}"
+                item="${menu_items[i+j]}"
+
+                # Color only the shortcut letter inside brackets
+                item=$(printf '%s' "$item" | sed \
+                    "s/\[\([^]]\)\]/[${BG_RED}\1${RESET}]/")
+
+                printf -v cell "%-*s" "${col_max[j]}" "$item"
             else
                 printf -v cell "%-*s" "${col_max[j]}" ""
             fi
@@ -342,109 +403,220 @@ SUMMARIZED DIFF:
     s|^([+-])[[:space:]]*/\*|\1 COMMENT:|;
 ')
 
-SUBJECT_PROMPT="Generate one concise commit subject from the provided diff.
+SUBJECT_PROMPT="Generate a Git commit message from the provided diff.
 
-Requirements:
-- Do not output markdown, explanations, quotes, code fences, or any additional text.
-- Type Format: type.
-- Scope Format: (scope) (Add brackets)
-- Description: description text.
-- Maximum length of description: 75 characters.
-- Use imperative mood (e.g. \"add\", \"fix\", \"update\", \"remove\").
-- Describe only the main purpose of the change.
-- Select the most significant change in the diff.
-- Ignore minor secondary changes; they belong in the commit body.
-- Describe the outcome or behavior change, not implementation details.
-- Be specific about what changed.
-- Avoid vague wording such as \"update\", \"improve\", or \"fix issue\" without context.
+Return EXACTLY one valid JSON object and nothing else.
+
+JSON schema:
+{
+  \"type\": \"string\",
+  \"scope\": \"string\",
+  \"subject\": \"string\",
+  \"body\": \"string\"
+}
+
+General rules:
+- Output ONLY valid JSON.
+- Do not output markdown.
+- Do not output explanations.
+- Do not output comments.
+- Do not output code fences.
+- Do not output any text before or after the JSON object.
+- Escape all JSON special characters correctly.
+
+JSON field rules:
+- type: The Conventional Commit type.
+- scope: A short logical project area. Never a file path.
+- subject: Only the description part of the commit message. Do not include type or scope.
+- body: Additional explanation describing secondary changes, context, motivation, or important details.
+
+Final commit format:
+The application will construct the final commit message as:
+
+type(scope): subject
+
+Examples:
+refactor(hooks): simplify commit message generation
+fix(auth): handle expired session tokens
+feat(ui): add dark mode support
+
+Do NOT include \"type(scope):\" inside the subject field.
+
+Commit subject rules:
+- Subject must describe the primary purpose of the change.
+- Maximum subject length: 75 characters.
+- Use imperative verbs:
+  add, fix, update, remove, support, prevent, allow, simplify, improve.
+- Base the subject strictly on the diff.
+- Select the most significant change for the subject.
+- Ignore secondary changes in the subject; describe them in the body.
+- Describe behavior or outcome, not implementation details.
+- Avoid vague subjects:
+  update
+  improve
+  cleanup
+  fix issue
+- Do not repeat the type in the subject.
+- Do not start the subject with a capital letter unless required.
+
+Good:
+{
+  \"type\": \"refactor\",
+  \"scope\": \"hooks\",
+  \"subject\": \"simplify commit message generation\",
+  \"body\": \"Reduced duplication in the commit hook workflow and improved validation handling.\"
+}
+
+Bad:
+{
+  \"type\": \"refactor\",
+  \"scope\": \".githooks/prepare-commit-msg\",
+  \"subject\": \"Refactor commit message generation logic\",
+  \"body\": \"\"
+}
 
 Type selection:
-- feat: new user-visible functionality or behavior.
+- feat: new user-visible functionality.
 - fix: correction of incorrect behavior.
-- refactor: internal restructuring without behavior change.
-- style: formatting, whitespace, linting, or code style only.
+- refactor: internal restructuring without behavior changes.
+- style: formatting, whitespace, linting, or style only.
 - docs: documentation-only changes.
 - test: tests only.
 - perf: performance improvements.
 - chore: maintenance, tooling, configuration, or housekeeping.
-- release: version release changes.
+- release: release changes.
 - remove: removal of functionality, code, or files.
-- build: build system or dependency management.
+- build: build system or dependency changes.
 - ci: CI/CD changes.
-- security: security-related fixes or improvements.
+- security: security-related improvements.
 - i18n: internationalization or localization.
 - deps: dependency updates.
-- ui: user interface or visual changes.
-- cleanup: minor cleanup and non-functional improvements.
+- ui: user interface changes.
+- cleanup: minor non-functional cleanup.
 
 Classification rules:
-- Classify based on behavior and user impact, not code volume.
-- Base the subject strictly on observable changes in the diff.
-- New functions, refactoring, renaming, moving files, comments, formatting, labels, and cleanup are not automatically feat.
-- If behavior does not change, prefer refactor, chore, style, or cleanup.
-- If user-visible functionality is added, prefer feat.
-- If incorrect behavior is corrected, prefer fix.
-- For fix commits, describe what was wrong and what changed.
+- Classify based on behavior and user impact, not number of changed lines.
+- Multiple changed files do not automatically mean feat.
+- New functions do not automatically mean feat.
+- Refactoring does not automatically mean feat.
+- Renaming does not automatically mean feat.
+- Formatting does not automatically mean feat.
+- Comments do not imply behavior changes.
+- Documentation does not imply functionality changes.
+- If behavior does not change, prefer:
+  refactor, chore, style, docs, cleanup, deps.
+- If user-visible functionality is added, use feat.
+- If incorrect behavior is corrected, use fix.
 - Choose exactly one type.
 
 Scope rules:
-- Infer the scope from the files, modules, components, or functionality changed.
-- Use a short, meaningful lowercase scope.
-- Prefer existing project terminology.
-- Omit the scope if it is unclear.
-- Do not use generic scopes like \"misc\", \"general\", or \"code\".
+- Scope must describe the main logical subsystem affected.
+- Scope must be short and lowercase.
+- Scope must NOT be a file path.
+- Scope must NOT contain:
+  dots
+  slashes
+  filenames
+  file extensions
+- Scope must never directly copy a changed file name.
 
-The add_body_message:
-- Set to true when the commit contains multiple unrelated changes, changes across different areas/components, or requires additional context beyond the subject line.
-- Set to false when the commit contains a single focused change that can be fully described by the subject line.
+Scope selection rules:
+- Choose the most relevant subsystem when multiple files are changed.
+- Prefer the area where the main behavior change happened.
+- If changes affect multiple unrelated areas, choose the primary area only.
+- Do not create combined scopes like:
+  auth-ui
+  api-hooks
+  frontend-backend
+- Use a broader logical scope when appropriate.
 
 Examples:
-type: fix | scope : (auth) | description : handle expired session tokens
-type: feat | scope : (api) | description : add user profile endpoint
-type: refactor | scope: (parser) | description : simplify markdown processing
-type: docs | scope : (readme) | description : clarify installation steps
+.githooks/prepare-commit-msg -> hooks
+.githooks/* -> hooks
+.github/workflows/build.yml -> ci
+src/auth/login.ts -> auth
+src/components/Button.tsx -> ui
+src/api/client.ts -> api
+README.md -> docs
+package.json dependency changes -> deps
 
+Possible scopes include but are not limited to:
+hooks
+auth
+api
+ui
+docs
+ci
+parser
+config
+database
+deps
+build
+test
+cli
+core
+security
+i18n
+logging
+cache
+storage
+network
+performance
+validation
+release
 
-Example valid output:
-fix(cli): handle missing config file
+If no meaningful logical scope exists:
+return an empty string.
 
-OUTPUT FORMAT:
-- Do NOT use braces {}, keys, arrays, or quotes.
-- Return only valid JSON!
-- Do not output ANSI escape sequences!
-- Do not use colors, formatting, cursor movement, or terminal control codes!
-- Don't use newlines and tabs in the output!
+Body rules:
+- Always include the body property.
+- Use an empty string when no explanation is needed.
+- The body may describe multiple related changes.
+- Include secondary changes that are not important enough for the subject.
+- Explain context, motivation, user impact, migration notes, or important decisions.
+- Do not repeat the subject.
+- Do not list changed files.
+- Do not describe low-level implementation details.
+- Keep it concise.
 
-Maximum length of description: 75 characters."
+Examples of good body content:
+- \"Added validation for configuration files and improved error messages for invalid input.\"
+- \"Updated the API client handling and adjusted related tests to cover the new behavior.\"
+- \"Improved caching behavior and fixed stale data handling during updates.\"
 
-BODY_PROMPT="Generate only the Git commit body.
+Body formatting rules:
+- Body may contain escaped \\n characters.
+- Body must not contain carriage returns.
+- Body must not contain tab characters.
+- Never output literal line breaks inside JSON strings.
 
-Rules:
-- Plain text only.
-- No subject line.
-- No commit type.
-- No markdown, bullets, JSON, code blocks, emojis, or explanations.
-- Output only the body.
+Correct:
+{
+  \"body\": \"Explains why the change was needed.\\nAdds context for future maintainers.\"
+}
 
-Interpretation:
-- .md files are documentation, not source code.
-- Describe documentation changes as documentation changes.
-- Comments provide context but do not imply behavior changes.
-- Do not infer features from comments, labels, annotations, formatting, or documentation.
-- Behavior changes come only from executable code changes.
+Incorrect:
+{
+  \"body\": \"Explains why the change was needed.
+Adds context for future maintainers.\"
+}
 
-Format:
-- First line: concise summary of what changed and why.
-- Up to 4 additional lines with important details.
-- Focus on behavior, user impact, and key changes.
-- Ignore minor refactors unless they affect behavior.
+Before producing the answer, silently verify:
+- Output is valid JSON.
+- Keys are exactly:
+  type
+  scope
+  subject
+  body
+- type is one valid Conventional Commit type.
+- scope is a logical scope, never a path.
+- subject is <= 75 characters.
+- subject does not contain type or scope.
+- body may contain multiple related changes.
+- body contains no carriage returns.
+- body contains no tab characters.
 
-Example:
-
-Adds interactive commit selection to improve workflow
-
-Allows reviewing AI-generated commit messages before use.
-Supports regenerating or editing suggestions."
+Return ONLY the JSON object."
 
 # ----------------------------
 # 🧠 AI generator functions
@@ -452,7 +624,7 @@ Supports regenerating or editing suggestions."
 
 # Generates the commit message body using Ollama.
 generate_body() {
-    printf "%s" "$diff_payload" | OLLAMA_KEEP_ALIVE=30m ollama run qwen-commit "$BODY_PROMPT"
+    printf "%s" "$clean_diff_payload" | OLLAMA_KEEP_ALIVE=30m ollama run qwen-commit "$BODY_PROMPT"
 }
 
 # Gets the description for a given conventional commit type.
@@ -633,20 +805,15 @@ while true; do
                 new_msg="❌ Please choose 1-$total_ai_msg"
             fi
             ;;
-        e[0-9]*)
-            idx="${choice#e}"
-            if check_choice "$idx" $total_ai_msg; then
-                var_name="AI_MSG_$idx"
-                final_msg=$(build_commit_message "${!var_name}" "$body_msg")
-                printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
-                exec < /dev/tty
-                exec > /dev/tty
-                exec 2> /dev/tty
-                "${EDITOR:-nano}" "$COMMIT_MSG_FILE"
-                exit 0
-            else
-                new_msg="❌ Please choose 1-$total_ai_msg"
-            fi
+        e)
+            var_name="AI_MSG_$idx"
+            final_msg=$(build_commit_message "${!var_name}" "$body_msg")
+            printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
+            exec < /dev/tty
+            exec > /dev/tty
+            exec 2> /dev/tty
+            "${EDITOR:-nano}" "$COMMIT_MSG_FILE"
+            exit 0
             ;;
         m)
             > "$COMMIT_MSG_FILE"
@@ -859,22 +1026,49 @@ generate_subject() {
     clean_diff_payload=$(printf '%s' "$diff_payload" \
     | sed $'s/\x1B\\[[0-9;?]*[ -\\/]*[@-~]//g' \
     | tr -d '\000-\010\013\014\016-\037')
-    printf "%s" "$diff_payload" | ollama run \
-  --format '{
-    "type":"object",
-    "properties":{
-      "type":{"type":"string"},
-      "scope":{"type":"string"},
-      "description":{"type":"string"},
-      "add_body_message":{"type":"boolean"}
-    },
-    "required":["type","description","add_body_message"],
-    "additionalProperties":false
-  }' \
-  qwen-commit \
-  "$SUBJECT_PROMPT"
-    #printf "%s" "$diff_payload" | ollama run --format json qwen2.5-coder:7b "$SUBJECT_PROMPT"
-    #printf "%s" "$diff_payload" | OLLAMA_NO_COLOR=1 ollama run qwen2.5-coder:7b "$SUBJECT_PROMPT";
+    curl -s http://localhost:11434/api/generate \
+        -H "Content-Type: application/json" \
+        -d "$(jq -n \
+            --arg model "qwen2.5-coder:7b" \
+            --arg prompt "$SUBJECT_PROMPT
+
+        DIFF:
+        $clean_diff_payload" \
+            '{
+            model: $model,
+            prompt: $prompt,
+            options: {
+                temperature: 0
+            },
+            format: {
+                type: "object",
+                properties: {
+                    type: {
+                        type: "string"
+                    },
+                    scope: {
+                        type: "string"
+                    },
+                    subject: {
+                        type: "string",
+                        maxLength: 75
+                    },
+                    body: {
+                        type: "string",
+                        pattern: "^[^\\r\\n]*$"
+                    }
+                },
+                required: [
+                    "type",
+                    "scope",
+                    "subject",
+                    "body"
+                ],
+                additionalProperties: false
+            },
+            stream: false
+            }'
+        )"
 }
 
 fix_json_control_chars() {
@@ -920,63 +1114,51 @@ fix_json_control_chars() {
     '
 }
 
-fix_json_control_chars_2() {
-    perl -pe '
-        s/([\x00-\x1F])/sprintf("\\u%04x", ord($1))/ge
+strip_terminal_codes() {
+    perl -0777 -pe '
+        # Real ANSI escape sequences
+        s/\x1B\[[0-?]*[ -\/]*[@-~]//g;
+
+        # JSON escaped ANSI sequences (\u001b[...)
+        s/\\u001[bB]\[[0-?]*[ -\/]*[@-~]//g;
+
+        # Literal escaped ESC forms (\033[...)
+        s/\\033\[[0-?]*[ -\/]*[@-~]//g;
     '
 }
 
+start_ollama() {
+    if ! curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
+        echo "Starting Ollama..."
+        ollama serve >/tmp/ollama.log 2>&1 &
+
+        until curl -s http://localhost:11434/api/tags >/dev/null 2>&1; do
+            sleep 0.2
+        done
+    fi
+}
+
 # Generates a batch of commit message suggestions and sorts them longest first.
-generate() {
-    local start=$1
-    local end=$2
-    local idx=$start
-    local messages=()
+generate_ai_message() {
+    start_ollama
+
+    clear
 
     print_title
     echo ""
 
-    print_center "Generating commit subject message..."
+    print_center "Generating commit message..." "$RED"
 
-    while [ "$idx" -le "$end" ]; do
-        json_msg=$(generate_subject)
-        #printf '%s\n' "$json_msg"
-        #press_continue
-        json_msg=$(printf '%s' "$json_msg" | fix_json_control_chars)
-        #printf '%s\n' "$json_msg"
-        #press_continue
-        msg=$(printf '%s' "$json_msg" | jq -r '.description')
-        add_body_message=$(printf '%s' "$json_msg" | jq -r '.add_body_message')
-        if [ "$add_body_message" = "true" ]; then
-            print_center "Generating commit body message..."
-            body_msg=$(generate_body)
-        else
-            print_center "No body needed"
-        fi
-        press_continue
-        #printf '%s\n' "$msg"
-        msg=$(cleanup_ai_msg "$msg")
-        #press_continue
-        if [ -n "$msg" ]; then
-            messages+=("$msg")
-        fi
-
-        idx=$((idx + 1))
-    done
-
-    # Sort messages by length: shortest first, longest last
-    readarray -t messages < <(
-        printf "%s\n" "${messages[@]}" |
-        awk '{ print length($0) "\t" $0 }' |
-        sort -n |
-        cut -f2-
-    )
-
-    # Assign sorted messages back to AI_MSG variables
-    idx=$start
-    for msg in "${messages[@]}"; do
-        printf -v "AI_MSG_$idx" '%s' "$msg"
-        idx=$((idx + 1))
+    json_msg=$(generate_subject | jq -r '.response')
+    NEW_TYPE=$(printf '%s' "$json_msg" | jq -r '.type')
+    NEW_SCOPE=$(printf '%s' "$json_msg" | jq -r '.scope')
+    NEW_SUBJECT=$(printf '%s' "$json_msg" | jq -r '.subject')
+    NEW_SUBJECT="${NEW_SUBJECT,}"
+    NEW_BODY=$(printf '%s' "$json_msg" | jq -r '.body')
+    
+    for i in {1..3}; do
+        tput bel
+        sleep 0.3
     done
 }
 
@@ -988,7 +1170,7 @@ add_message_suggestions(){
     start_idx=$((total_ai_msg - MSGS_ADD -1))
     [ "$start_idx" -lt 1 ] && start_idx=1
 
-    generate "$start_idx" "$total_ai_msg"
+    generate_ai_message "$start_idx" "$total_ai_msg"
 
     # Extract scopes from generated commit messages and collect unique scopes
     for i in $(seq "$start_idx" "$total_ai_msg"); do
@@ -1007,63 +1189,6 @@ add_message_suggestions(){
 
     gen_time_info="$((SECONDS - start_t))s"
     regen_ai=0
-}
-
-# ----------------------------
-# Display Functions
-# ----------------------------
-
-print_messages(){
-    local idx display_count msg var_name next_found tmp j
-    declare -A printed_msgs
-
-    idx=1
-    display_count=0
-
-    while [ "$idx" -le "$MAX_AI_MSGS" ]; do
-        var_name="AI_MSG_$idx"
-        msg="${!var_name}"
-
-        if [ -n "$msg" ]; then
-
-            # Skip duplicate AI messages
-            if [ -n "${printed_msgs[$msg]}" ]; then
-                idx=$((idx + 1))
-                continue
-            fi
-            printed_msgs[$msg]=1
-
-            # group spacing (before group except first)
-            if [ $((display_count % MSGS_ADD)) -eq 0 ] && [ "$display_count" -ne 0 ]; then
-                print_tty ""
-            fi
-
-            print_tty_indent_5 " [$idx] $msg"
-
-            display_count=$((display_count + 1))
-
-            # check if another unique message exists AFTER this one
-            next_found=0
-            j=$((idx + 1))
-
-            while [ "$j" -le "$MAX_AI_MSGS" ]; do
-                tmp="AI_MSG_$j"
-
-                if [ -n "${!tmp}" ] && [ -z "${printed_msgs[${!tmp}]}" ]; then
-                    next_found=1
-                    break
-                fi
-
-                j=$((j + 1))
-            done
-
-            if [ "$next_found" -eq 1 ]; then
-                print_tty ""
-            fi
-        fi
-
-        idx=$((idx + 1))
-    done
 }
 
 # ============================
@@ -1186,14 +1311,6 @@ confirm_commit_message() {
     done
 }
 
-strip_ansi() {
-    sed -E $'s/\x1B\\][^\x07]*(\x07|\x1B\\\\)//g; s/\x1B\\[[0-9;?]*[ -\\/]*[@-~]//g; s/\x1B[()][0-2A-Za-z]//g'
-    # sed -E$'s/\x1B\\[[0-9;?]*[ -\\/]*[@-~]//g'
-    #sed -E $'s/\x1B\\[[0-9;?]*[A-Za-z]//g; s/\\[[0-9;?]*[A-Za-z]//g'
-    #sed -E $'s/\x1B\\][^\x07]*(\x07|\x1B\\\\)//g; s/\x1B\\[[0-9;?]*[ -\\/]*[@-~]//g; s/\x1B[()][0-2A-Za-z]//g' \
-    #| tr -cd '\11\12\15\40-\176'
-}
-
 # ----------------------------
 # Main Menu Loop
 # ----------------------------
@@ -1201,7 +1318,7 @@ strip_ansi() {
 clear
 add_message_suggestions
 
-run_main_menu(){
+run_menu(){
     local new_message_msg=""
 
     while true; do
@@ -1210,30 +1327,20 @@ run_main_menu(){
 
         print_title
         print_seperator
-        debug_str=""
-        if [ "${SHOW_PERFORMANCE_INFO:-0}" -eq 1 ]; then
-            debug_str="Generation took $gen_time_info of $diff_len characters"
-        fi
-
-        print_center "Main Menu"
-        if [ "$debug_str" != "" ]; then
-            print_center "($debug_str)"
-        fi
-        print_seperator
-        print_messages
-        if [ "$body_msg" != "" ]; then
+        print_center "Subject:" "${YELLOW}"
+        print_center "$NEW_TYPE($NEW_SCOPE): $NEW_SUBJECT"
+        if [ "$NEW_BODY" != "" ]; then
             print_seperator
-            print_center "Body:"
-            print_multi_line_center "$body_msg"
+            print_center "Body:" "${YELLOW}"
+            print_multi_line_center "$NEW_BODY" "$RESET" 85
         fi
         print_seperator
         menu_items=(
             "[S] Show Changes"
             "[C] Commit"
-            "[E1-E5] Edit and Choose Suggestion"
-            "[A] Add Suggestions"
-            "[B] Body Menu"
-            "[M] Manual Message"
+            "[E] Edit"
+            "[R] Remove Body"
+            "[D] Debug Info"
             "[X] Exit without commiting"
         )
 
@@ -1256,59 +1363,28 @@ run_main_menu(){
         fi
         choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
         case "$choice" in
-            [0-9]*)
-                if check_choice "$choice" $total_ai_msg; then
-                    var_name="AI_MSG_$choice"
-                    final_msg=$(build_commit_message "${!var_name}" "$body_msg")
-                    printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
-                    echo "✅ AI commit #$choice accepted."
-                    exit 0
-                else
-                    new_msg="❌ Please choose 1-$total_ai_msg"
-                fi
-            ;;
-            e[0-9]*)
-                idx="${choice#e}"
-                if check_choice "$idx" $total_ai_msg; then
-                    var_name="AI_MSG_$idx"
-                    final_msg=$(build_commit_message "${!var_name}" "$body_msg" | strip_ansi)
-                    printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
-
-                    # Remove terminal escape sequences before opening editor
-                    #sed -i -E 's/\x1B\[[0-9;?]*[ -\/]*[@-~]//g' "$COMMIT_MSG_FILE"
-
-                    tmp=$(mktemp)
-
-                    strip_ansi < "$COMMIT_MSG_FILE" > "$tmp" &&
-                    cat "$tmp" > "$COMMIT_MSG_FILE"
-
-                    rm "$tmp"
-
-                    # discard buffered terminal input
-                    while read -r -t 0.01 -n 1 _ < /dev/tty; do :; done
-
-                    # Reset terminal state before launching editor
-                    stty sane < /dev/tty
-
-                    "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2> /dev/tty
-
-                    if ! cmp -s "$COMMIT_MSG_FILE" <(printf "%s" "$final_msg"); then
-                        if confirm_commit_message; then
-                            printf "Using edited commit message\n" > /dev/tty
-                            exit 0
-                        else
-                            continue
-                        fi
-                    fi
-                    continue
-                else
-                    new_msg="❌ Please choose E1-E$total_ai_msg"
-                fi
-            ;;
-            b)
-              run_body_menu
-            ;;
             c)
+                final_msg=$(build_commit_message "$NEW_SUBJECT" "$NEW_BODY")
+                printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
+                exit 0
+            ;;
+            e)
+                final_msg=$(build_commit_message "$NEW_SUBJECT" "$NEW_BODY")
+                printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
+
+                "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2> /dev/tty
+
+                if ! cmp -s "$COMMIT_MSG_FILE" <(printf "%s" "$final_msg"); then
+                    if confirm_commit_message; then
+                        printf "Using edited commit message\n" > /dev/tty
+                        exit 0
+                    else
+                        continue
+                    fi
+                fi
+                continue
+            ;;
+            s)
                 clear
                 if git diff --cached | grep -q .; then
                     git diff --cached
@@ -1319,13 +1395,18 @@ run_main_menu(){
                 fi
                 press_continue
             ;;
-
+            d)
+                new_msg="Generation took $gen_time_info of $diff_len characters"
+            ;;
             x)
                 exit 1
+            ;;
+            *)
+                new_msg="❌ Invalid input. Enter s,c,e,r,d or x" 
             ;;
         esac
     done
 
 }
 
-run_main_menu
+run_menu
