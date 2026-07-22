@@ -92,7 +92,7 @@ print_title() {
 \    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
  \______  /__||__|  \____/|____/____//__/\_ \\___  >
         \/                                 \/    \/ 
-v1.0.0 (c) 2026 by WPConstructor - MIT License
+v0.5.0 (c) 2026 by WPConstructor - MIT License
 EOF
 }
 
