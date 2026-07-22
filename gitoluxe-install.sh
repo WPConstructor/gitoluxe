@@ -2,17 +2,17 @@
 
 set -e
 
-echo "🚀 Installing AI Git System (Ollama + Qwen3.5 + Hooks)..."
+echo "🚀 Installing Gitoluxe (Ollama + Model + Hooks)..."
 
 HOOK_DIR=".githooks"
 HOOK_FILE="$HOOK_DIR/prepare-commit-msg"
 
-LATEST_TAG=$(curl -s https://api.github.com/repos/WPConstructor/ai-git/tags \
+LATEST_TAG=$(curl -s https://api.github.com/repos/WPConstructor/gitoluxe/tags \
   | grep '"name"' \
   | head -n 1 \
   | cut -d '"' -f4)
 
-REPO_URL="https://raw.githubusercontent.com/WPConstructor/ai-git/$LATEST_TAG/.githooks/prepare-commit-msg"
+REPO_URL="https://raw.githubusercontent.com/WPConstructor/gitoluxe/$LATEST_TAG/.githooks/prepare-commit-msg"
 
 # -------------------------
 # 0. Check Git repository
