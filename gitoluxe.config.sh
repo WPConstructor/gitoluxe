@@ -8,7 +8,7 @@ CONFIG_FILE="gitoluxe.config.env"
 
 DEFAULT_MODEL="qwen3:4b"
 DEFAULT_TEMPERATURE="0.1"
-DEFAULT_MAX_INPUT_CHARS="5000"
+DEFAULT_MAX_INPUT_CHARS="7000"
 
 
 # --------------------------------------------------
@@ -206,7 +206,7 @@ set_temperature()
 # This limits the git diff sent to the AI prompt.
 #
 # Example:
-# set_max_input_chars 5000
+# set_max_input_chars 7000
 # --------------------------------------------------
 
 set_max_input_chars()
@@ -258,9 +258,9 @@ read TEMP
 TEMP=${TEMP:-0.1}
 set_temperature "$TEMP"
 
-printf "Max input chars (default 5000): "
+printf "Max input chars (default 7000): "
 read CHARS
-CHARS=${CHARS:-5000}
+CHARS=${CHARS:-7000}
 set_max_input_chars "$CHARS"
 
 show_config
