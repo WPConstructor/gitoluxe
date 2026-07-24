@@ -8,7 +8,7 @@
 REQUIRED_GB=6
 
 # Maximum number of characters allowed in a commit message prompt/input
-MAX_CHARS=7000
+MAX_INPUT_CHARS=7000
 
 # Maximum number of AI-generated commit message suggestions stored
 MAX_AI_MSGS=20
@@ -37,6 +37,35 @@ BG_BLUE=$'\033[44m'
 BG_MAGENTA=$'\033[45m'
 BG_CYAN=$'\033[46m'
 BG_WHITE=$'\033[47m'
+
+# --------------------------------------------------
+# Read config
+#
+# Usage:
+# MODEL=$(config_get MODEL qwen3:4b)
+# --------------------------------------------------
+
+config_get()
+{
+    key="$1"
+    default="$2"
+
+    value=""
+
+    if [ -f "$CONFIG_FILE" ]; then
+        value=$(grep "^${key}=" "$CONFIG_FILE" | cut -d '=' -f2-)
+    fi
+
+    if [ -n "$value" ]; then
+        echo "$value"
+    else
+        echo "$default"
+    fi
+}
+
+MODEL=$(config_get MODEL qwen3:4b)
+MAX_INPUT_CHARS=$(config_get MAX_INPUT_CHARS 7000)
+TEMPERATURE=$(config_get TEMPERATURE 0)
 
 # ============================
 # Common Functions 
@@ -363,18 +392,18 @@ fi
 
 staged_files=$(git diff --cached --name-status)
 staged_stat=$(git diff --cached --stat)
-staged_diff=$(git diff --cached --unified=1 --no-color | head -c "$MAX_CHARS")
+staged_diff=$(git diff --cached --unified=1 --no-color | head -c "$MAX_INPUT_CHARS")
 
 SHA="$3"
 
 # If nothing staged, check commit context (amend / override)
 if [ -z "$staged_files" ]; then
-    staged_files=$(git show --name-status --format="" HEAD 2>/dev/null | head -c "$MAX_CHARS")
-    staged_stat=$(git show --stat --format="" HEAD 2>/dev/null | head -c "$MAX_CHARS")
-    staged_diff=$(git diff HEAD --unified=1 --no-color 2>/dev/null | head -c "$MAX_CHARS")
+    staged_files=$(git show --name-status --format="" HEAD 2>/dev/null | head -c "$MAX_INPUT_CHARS")
+    staged_stat=$(git show --stat --format="" HEAD 2>/dev/null | head -c "$MAX_INPUT_CHARS")
+    staged_diff=$(git diff HEAD --unified=1 --no-color 2>/dev/null | head -c "$MAX_INPUT_CHARS")
 
     if [ -z "$staged_diff" ]; then
-        staged_diff=$(git show --unified=1 --no-color HEAD 2>/dev/null | head -c "$MAX_CHARS")
+        staged_diff=$(git show --unified=1 --no-color HEAD 2>/dev/null | head -c "$MAX_INPUT_CHARS")
     fi
     is_amend=1
 fi
@@ -384,7 +413,7 @@ if [ -z "$staged_files" ]; then
 fi
 
 diff_len=${#staged_diff}
-[ "$diff_len" -eq "$MAX_CHARS" ] && staged_diff="${staged_diff}\n\n... (truncated)"
+[ "$diff_len" -eq "$MAX_INPUT_CHARS" ] && staged_diff="${staged_diff}\n\n... (truncated)"
 
 # ----------------------------
 # AI Prompts & Data
@@ -1155,43 +1184,44 @@ generate_subject() {
         -H "Content-Type: application/json" \
         -d "$(jq -n \
             --arg model "qwen2.5-coder:7b" \
-            --arg prompt "$SUBJECT_PROMPT
+            --arg prompt "${SUBJECT_PROMPT}
 
-        DIFF:
-        $clean_diff_payload" \
+    DIFF:
+    ${clean_diff_payload}" \
+            --argjson temperature "${TEMPERATURE:-0}" \
             '{
-            model: $model,
-            prompt: $prompt,
-            options: {
-                temperature: 0
-            },
-            format: {
-                type: "object",
-                properties: {
-                    type: {
-                        type: "string"
-                    },
-                    scope: {
-                        type: "string"
-                    },
-                    subject: {
-                        type: "string",
-                        maxLength: 75
-                    },
-                    body: {
-                        type: "string",
-                        pattern: "^[^\\r\\n]*$"
-                    }
+                model: $model,
+                prompt: $prompt,
+                options: {
+                    temperature: $temperature
                 },
-                required: [
-                    "type",
-                    "scope",
-                    "subject",
-                    "body"
-                ],
-                additionalProperties: false
-            },
-            stream: false
+                format: {
+                    type: "object",
+                    properties: {
+                        type: {
+                            type: "string"
+                        },
+                        scope: {
+                            type: "string"
+                        },
+                        subject: {
+                            type: "string",
+                            maxLength: 75
+                        },
+                        body: {
+                            type: "string",
+                            pattern: "^[^\\r\\n]*$"
+                        }
+                    },
+                    required: [
+                        "type",
+                        "scope",
+                        "subject",
+                        "body"
+                    ],
+                    additionalProperties: false
+                },
+                stream: false
             }'
         )"
 }

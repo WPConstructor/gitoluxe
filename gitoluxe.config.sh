@@ -71,7 +71,7 @@ config_get()
 
     if [ -f "$CONFIG_FILE" ]; then
         value=$(grep "^${key}=" "$CONFIG_FILE" | cut -d '=' -f2-)
-    fi
+    figet
 
     if [ -n "$value" ]; then
         echo "$value"
@@ -253,9 +253,9 @@ show_config()
 
 set_model
 
-printf "Temperature (default 0.1): "
+printf "Temperature (default 0): "
 read TEMP
-TEMP=${TEMP:-0.1}
+TEMP=${TEMP:-0}
 set_temperature "$TEMP"
 
 printf "Max input chars (default 7000): "
