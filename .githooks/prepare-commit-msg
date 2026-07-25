@@ -51,7 +51,6 @@ MSGS_ADD=1
 
 RED=$'\033[31m'
 GREEN=$'\033[32m'
-#YELLOW=$'\033[93m'
 VIOLET=$'\033[38;5;129m'
 YELLOW=$'\033[38;5;226m'
 RESET=$'\033[0m'
@@ -924,264 +923,6 @@ body_time_info=""
 body_msg=""
 new_msg=""
 
-# ----------------------------------
-# Step 1/4 Select Subject Message 
-# ----------------------------------
-while true; do
-
-    break
-
-    clear
-
-    print_title
-    
-    # ----------------------------
-    # 🎮 Menu
-    # ----------------------------
-
-    print_separator
-    do_menu
-
-    # ----------------------------
-    # 🧠 Display suggestions
-    # ----------------------------
-
-    echo "" > /dev/tty 
-    print_separator
-    debug_str=""
-
-    # ----------------------------
-    # Choice
-    # ----------------------------
-
-    echo "" > /dev/tty
-    if [ -n "$new_msg" ]; then
-        print_tty "$new_msg\n"
-        new_msg=""
-    fi
-
-    printf "Choice: " > /dev/tty
-    if ! IFS= read -r choice < /dev/tty; then
-        choice="1"
-    fi
-    choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
-
-    if desc=$(get_type_desc "$choice"); then
-        new_msg="$choice\n\n$desc\n"
-        continue
-    fi
-
-    case "$choice" in
-        x)
-            print_tty "Commit canceled"
-            exit 1
-            ;;
-
-        [0-9]*)
-            if check_choice "$choice" $total_ai_msg; then
-                var_name="AI_MSG_$choice"
-                final_msg=$(build_commit_message "${!var_name}" "$body_msg")
-                printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
-                new_msg="✅ AI commit #$choice accepted"
-                exit 0
-            else
-                new_msg="❌ Please choose 1-$total_ai_msg"
-            fi
-            ;;
-        e)
-            var_name="AI_MSG_$idx"
-            final_msg=$(build_commit_message "${!var_name}" "$body_msg")
-            printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
-            exec < /dev/tty
-            exec > /dev/tty
-            exec 2> /dev/tty
-            "${EDITOR:-nano}" "$COMMIT_MSG_FILE"
-            exit 0
-            ;;
-        m)
-            > "$COMMIT_MSG_FILE"
-            exec < /dev/tty
-            exec > /dev/tty
-            exec 2> /dev/tty            
-            "${EDITOR:-nano}" "$COMMIT_MSG_FILE"
-            exit 0
-            ;;
-
-        c)
-            if git diff --cached | grep -q .; then
-                git diff --cached
-            elif git diff HEAD | grep -q .; then
-                git diff HEAD
-            else
-                git show --unified=1 --no-color HEAD
-            fi
-            ;;
-
-        a)
-            new_msg="🧠 Adding 5 AI commit suggestions..."
-            regen_ai=1
-            continue
-            ;;
-        t)
-            types=("feat" "fix" "refactor" "style" "docs" "test" "perf" "chore" "release" "remove" "build" "ci" "security" "i18n" "deps" "hotfix" "ui" "merge" "revert" "move" "cleanup")
-            new_type=""
-            new_type_msg=""
-
-            while true; do
-                clear
-                print_separator
-                print_tty "Select Prefix Type (Stored: ${selected_type:-None}):"
-                for i in "${!types[@]}"; do
-                    printf "[%2d] %-10s " "$((i+1))" "${types[$i]}" > /dev/tty
-                    if [ $(( (i+1) % 3 )) -eq 0 ]; then print_tty ""; fi
-                done
-                [ $(( ${#types[@]} % 3 )) -ne 0 ] && print_tty ""
-                print_tty "[M]anual Input  [Q]uit Menu"
-                print_tty "Enter the type for a description of the type"
-                print_separator
-                print_tty new_type_msg
-                printf "Choice: " > /dev/tty
-                read -r type_choice < /dev/tty
-                type_choice=$(echo "$type_choice" | tr '[:upper:]' '[:lower:]')
-                
-                if desc=$(get_type_desc "$type_choice"); then
-                    new_type_msg="$type_choice\n\n$desc\n"
-                    continue
-                fi
-
-                if [[ "$type_choice" =~ ^[0-9]+$ ]] && [ "$type_choice" -ge 1 ] && [ "$type_choice" -le "${#types[@]}" ]; then
-                    new_type="${types[$((type_choice-1))]}"
-                    break
-                elif [ "$type_choice" = "m" ]; then
-                    printf "Enter manual prefix type: " > /dev/tty
-                    read -r new_type < /dev/tty
-                    new_type=$(echo "$new_type" | tr -d '[:space:]')
-                    [ -n "$new_type" ] && break
-                elif [ "$type_choice" = "q" ] || [ -z "$type_choice" ]; then
-                    break
-                else
-                    new_type_msg="❌ Invalid choice."
-                fi
-            done
-
-            if [ -n "$new_type" ]; then
-                selected_type="$new_type"
-                for i in $(seq 1 "$total_ai_msg"); do
-                    var_name="AI_MSG_$i"
-                    msg="${!var_name}"
-                    if [ -n "$msg" ]; then
-                        readarray -t parsed_parts < <(parse_commit_message "$msg")
-                        current_scope="${parsed_parts[1]}"
-                        current_description="${parsed_parts[2]}"
-                        if [ -n "$current_scope" ]; then
-                            updated_msg="${selected_type}(${current_scope}): ${current_description}"
-                        else
-                            updated_msg="${selected_type}: ${current_description}"
-                        fi
-                        printf -v "AI_MSG_$i" '%s' "$updated_msg"
-                    fi
-                done
-                new_msg="✅ All suggestions updated to type: $selected_type"
-            fi
-            continue
-            ;;
-        s)
-            new_scope=""
-            new_scope_msg=""
-
-            while true; do
-                clear
-                print_separator
-                
-                width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-                print_tty "Select Prefix Scope (Stored: ${selected_scope:-None}):"
-
-                # base width per column (adjust if you want tighter/wider layout)
-                col_width=20
-
-                # calculate how many columns fit
-                cols=$(( width / col_width ))
-                [ "$cols" -lt 1 ] && cols=1
-
-                for i in "${!unique_scopes[@]}"; do
-                    printf "[%2d] %-15s" "$((i+1))" "${unique_scopes[$i]}" > /dev/tty
-
-                    # newline when row is full
-                    if [ $(( (i+1) % cols )) -eq 0 ]; then
-                        printf "\n" > /dev/tty
-                    fi
-                done
-
-                # final newline if last row is incomplete
-                if [ $(( ${#unique_scopes[@]} % cols )) -ne 0 ]; then
-                    printf "\n" > /dev/tty
-                fi
-
-                print_tty "Enter Custom Scope [Q]uit Menu"
-                display_separator
-                print_tty new_scope_msg
-                print_tty "$new_scope_msg"
-                printf "Choice: " > /dev/tty
-                read -r scope_choice < /dev/tty
-                scope_choice=$(echo "$scope_choice" | tr '[:upper:]' '[:lower:]')
-                
-                if [[ "$scope_choice" =~ ^[0-9]+$ ]] && [ "$scope_choice" -ge 1 ] && [ "$scope_choice" -le "${#unique_scopes[@]}" ]; then
-                    new_scope="${unique_scopes[$((scope_choice-1))]}"
-                    break
-                elif [ "$scope_choice" = "m" ]; then
-                    printf "Enter manual prefix scope: " > /dev/tty
-                    read -r manual_input_scope < /dev/tty
-                    manual_input_scope=$(echo "$manual_input_scope" | tr -d '[:space:]')
-                    if [ -n "$manual_input_scope" ]; then
-                        new_scope="$manual_input_scope"
-                        break
-                    else
-                        new_scope_msg="❌ Manual scope cannot be empty."
-                    fi
-                elif [ "$scope_choice" = "q" ] || [ -z "$scope_choice" ]; then
-                    break # Quit without applying changes
-                else
-                    # User entered a string that is not a number or 'm'/'q'. Treat as manual input.
-                    new_scope="$scope_choice"
-                    break
-                fi
-            done
-
-            if [ -n "$new_scope" ]; then
-                selected_scope="$new_scope" # Store the selected scope for display
-                for i in $(seq 1 "$total_ai_msg"); do
-                    var_name="AI_MSG_$i"
-                    msg="${!var_name}"
-                    if [ -n "$msg" ]; then
-                        readarray -t parsed_parts < <(parse_commit_message "$msg")
-                        current_type="${parsed_parts[0]}"
-                        current_description="${parsed_parts[2]}"
-                        updated_msg="${current_type}(${selected_scope}): ${current_description}"
-                        printf -v "AI_MSG_$i" '%s' "$updated_msg"
-                    fi
-                done
-                new_msg="✅ All suggestions updated to scope: $selected_scope"
-            fi
-            continue
-            ;;
-        b)
-            print_tty "🧠 Creating body..."
-            regen_ai=2
-            continue
-            ;;
-        r)
-            body_msg=""
-            continue
-            ;;
-
-        *)
-            print_tty "❌ Please choose 1-$total_ai_msg, A, T, S, B/R, C, E1-E$total_ai_msg, M."
-            ;;
-    esac
-
-done
-
 # ============================
 # Main Menu
 # ============================
@@ -1189,20 +930,6 @@ done
 # ----------------------------
 # AI Functions (Step 1)
 # ----------------------------
-
-json_escape() {
-    jq -Rn --arg str "$1" '$str'
-}
-
-# Cleans up AI-generated messages by removing newlines, tabs, backticks, and extra spaces.
-cleanup_ai_msg() {
-    printf "%s" "$1" \
-    | strip_ansi \
-    | sed -E 's/\x1B\[[0-9;]*[mKHFJ]//g' \
-    | tr -d '\n\t' \
-    | sed -E 's/[[:space:]]+/ /g; s/`//g' \
-    | cut -c1-150
-}
 
 # Generates the commit message subject using Ollama.
 generate_subject() {
@@ -1255,62 +982,6 @@ generate_subject() {
         )"
 }
 
-fix_json_control_chars() {
-    perl -0777 -pe '
-        # Remove real ANSI escape sequences
-        s/\e\[[0-9;?]*[ -\/]*[@-~]//g;
-
-        # Remove escaped ANSI sequences from JSON text
-        s/\\u001[bB]\[[0-9;?]*[ -\/]*[@-~]//g;
-
-        my $in_string = 0;
-        my $escaped = 0;
-        my $out = "";
-
-        for my $c (split //, $_) {
-            if ($escaped) {
-                $out .= $c;
-                $escaped = 0;
-                next;
-            }
-
-            if ($c eq "\\") {
-                $out .= "\\";
-                $escaped = 1;
-                next;
-            }
-
-            if ($c eq "\"") {
-                $out .= "\"";
-                $in_string = !$in_string;
-                next;
-            }
-
-            if ($in_string) {
-                # remove control characters inside JSON strings
-                next if $c eq "\n" || $c eq "\t" || $c eq "\r";
-            }
-
-            $out .= $c;
-        }
-
-        $_ = $out;
-    '
-}
-
-strip_terminal_codes() {
-    perl -0777 -pe '
-        # Real ANSI escape sequences
-        s/\x1B\[[0-?]*[ -\/]*[@-~]//g;
-
-        # JSON escaped ANSI sequences (\u001b[...)
-        s/\\u001[bB]\[[0-?]*[ -\/]*[@-~]//g;
-
-        # Literal escaped ESC forms (\033[...)
-        s/\\033\[[0-?]*[ -\/]*[@-~]//g;
-    '
-}
-
 start_ollama() {
     if ! curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
         echo "Starting Ollama..."
@@ -1346,116 +1017,21 @@ generate_ai_message() {
     done
 }
 
-# Add AI-generated commit message suggestions batch
-add_message_suggestions(){
+add_message_suggestions() {
     start_t=$SECONDS
-    total_ai_msg=$((total_ai_msg + 1))
-    [ "$total_ai_msg" -gt $MAX_AI_MSGS ] && total_ai_msg=MAX_AI_MSGS
-    start_idx=$((total_ai_msg - MSGS_ADD -1))
-    [ "$start_idx" -lt 1 ] && start_idx=1
 
-    generate_ai_message "$start_idx" "$total_ai_msg"
+    generate_ai_message
 
-    # Extract scopes from generated commit messages and collect unique scopes
-    for i in $(seq "$start_idx" "$total_ai_msg"); do
-        var_name="AI_MSG_$i"
-        msg="${!var_name}"
-        if [ -n "$msg" ]; then
-            readarray -t parsed_parts < <(parse_commit_message "$msg")
-            current_scope="${parsed_parts[1]}"
+    readarray -t parsed_parts < <(parse_commit_message "$AI_MSG_1")
+    current_scope="${parsed_parts[1]}"
 
-            if [ -n "$current_scope" ] && [ -z "${scope_map[$current_scope]}" ]; then
-                unique_scopes+=("$current_scope")
-                scope_map[$current_scope]=1
-            fi
-        fi
-    done
+    if [ -n "$current_scope" ] && [ -z "${scope_map[$current_scope]}" ]; then
+        unique_scopes+=("$current_scope")
+        scope_map[$current_scope]=1
+    fi
 
     gen_time_info="$((SECONDS - start_t))s"
     regen_ai=0
-}
-
-# ============================
-# Body Menu
-# ============================
-
-# ----------------------------
-# Menu Loop
-# ----------------------------
-
-run_body_menu(){
-    body_time_info="";
-    new_body_msg=""
-
-    while true; do
-
-        clear
-
-        print_title
-        print_separator
-        print_center "Body Menu"
-        if [ "$body_time_info" != "" ]; then
-            print_center "$body_time_info"
-        fi
-        print_separator
-        if [ "$body_msg" = "" ]; then
-            print_center "No Commit Body has been added yet."
-        else
-            print_multi_line_center "$body_msg"
-        fi
-            
-        print_separator
-        menu_items=(
-            "[A] Add Body"
-            "[E] Edit Body"
-            "[R] Remove Body"
-            "[B] Back"
-            "[H] Help"
-        )
-        print_menu
-        print_separator
-        if [ "$body_time_info" != "" ]; then
-            print_tty_indent_1 "$new_body_msg"
-            new_body_msg=""
-        fi
-
-        printf " ? " > /dev/tty
-        if ! IFS= read -r choice < /dev/tty; then
-            choice="1"
-        fi
-        choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
-        case "$choice" in
-            a)
-                # ----------------------------
-                # Generate AI body message
-                # ----------------------------
-                clear
-                start_t=$SECONDS
-                print_title
-                print_separator
-                print_center "Generating commit body message..." > /dev/tty
-                body_msg=$(generate_body)
-                body_msg="$(
-                echo "$body_msg" \
-                | sed 's/```.*//g' \
-                | sed 's/`//g' \
-                | sed 's/\*\*//g' \
-                | sed '/^[[:space:]]*$/d'
-                )"
-                body_time_info="Generation took ($((SECONDS - start_t))s) of $diff_len characters"
-                regen_ai=0
-            ;;
-            h)
-                new_body_msg=" Add body if multiple changes or subject is unclear.
-
-    The commit body adds extra context when the subject line isn’t enough. It explains why a change was made, not just what changed. Use it for complex or multi-part changes. Keep it short and clear."
-                continue
-            ;;
-            b)
-                return
-            ;;
-        esac
-    done
 }
 
 # ----------------------------
@@ -1580,6 +1156,7 @@ run_menu(){
                             continue
                         fi
                     fi
+                    continue 2;
                 done
             ;;
             s)
