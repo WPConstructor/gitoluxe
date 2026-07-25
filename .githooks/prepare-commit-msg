@@ -1052,7 +1052,7 @@ confirm_commit_message() {
         print_multi_line_center "$NEW_COMMIT"
         print_separator
         echo ""
-        printf "Do you want to commit this message? (Y/N/B[Back to Editor]): " > /dev/tty
+        printf "Do you want to commit this message? If you choose No, the commit message will be reset. (Y/N/B[Back to Editor]): " > /dev/tty
         read -r choice < /dev/tty
 
         case "$choice" in
@@ -1167,6 +1167,9 @@ run_menu(){
                     git show --unified=1 --no-color HEAD
                 fi
                 press_continue
+            ;;
+            r)
+              NEW_BODY="";
             ;;
             d)
                 new_msg="Generation took $gen_time_info of $diff_len characters"
