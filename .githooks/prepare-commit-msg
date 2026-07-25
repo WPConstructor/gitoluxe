@@ -1065,13 +1065,13 @@ confirm_commit_message() {
 
         case "$choice" in
             [Yy])
-                return 0
-                ;;
-            [Nn])
                 return 1
                 ;;
-            [Bb])
+            [Nn])
                 return 2
+                ;;
+            [Bb])
+                return 3
                 ;;
             *)
                 printf "Please answer Y,N or B.\n" > /dev/tty
@@ -1146,15 +1146,21 @@ run_menu(){
 
                     if ! cmp -s "$COMMIT_MSG_FILE" <(printf "%s" "$final_msg"); then
                         NEW_COMMIT="$(<"$COMMIT_MSG_FILE")"
-                        confirm_return=$(confirm_commit_message);
-                        if [ "$confirm_return" -eq 0 ]; then
-                            printf "Using edited commit message\n" > /dev/tty
-                            exit 0
-                        elif [ "$confirm_return" -eq 1 ]; then
-                            continue 2;
-                        elif [ "$confirm_return" -eq 2 ]; then
-                            continue
-                        fi
+                        confirm_commit_message
+                        confirm_return=$?
+
+                        case "$confirm_return" in
+                            1)
+                                printf "Using edited commit message\n" > /dev/tty
+                                exit 0
+                                ;;
+                            2)
+                                continue 2
+                                ;;
+                            3)
+                                continue
+                                ;;
+                        esac
                     fi
                     continue 2;
                 done
