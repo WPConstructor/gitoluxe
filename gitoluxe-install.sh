@@ -2,6 +2,34 @@
 
 set -e
 
+CONFIG_FILE="gitoluxe.config.env"
+
+config_get()
+{
+    key="$1"
+    default="$2"
+
+    value=""
+
+    if [ -f "$CONFIG_FILE" ]; then
+        value=$(grep "^${key}=" "$CONFIG_FILE" | cut -d '=' -f2-)
+    fi
+
+    if [ -n "$value" ]; then
+        echo "$value"
+    else
+        echo "$default"
+    fi
+}
+
+echo "Checking if configurations set."
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    bash gitoluxe.config.sh
+else 
+  echo "✅ Configurations have been set."   
+fi
+
 echo "🚀 Installing Gitoluxe (Ollama + Model + Hooks)..."
 
 HOOK_DIR=".githooks"

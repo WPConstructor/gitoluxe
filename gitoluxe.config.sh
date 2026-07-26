@@ -1,11 +1,10 @@
 #!/bin/sh
 
-CONFIG_FILE="gitoluxe.config.env"
-
 # --------------------------------------------------
 # Defaults
 # --------------------------------------------------
 
+CONFIG_FILE="gitoluxe.config.env"
 DEFAULT_MODEL="qwen3:4b"
 DEFAULT_TEMPERATURE="0.1"
 DEFAULT_MAX_INPUT_CHARS="7000"
@@ -18,40 +17,13 @@ DEFAULT_MAX_INPUT_CHARS="7000"
 # --------------------------------------------------
 
 QWEN_MODELS="
-qwen3:0.6b|Ultra lightweight. Very fast, minimal memory usage.
-qwen3:1.7b|Small model. Good for simple commits and small diffs.
-qwen3:4b|Recommended default. Best speed/quality balance.
-qwen3:8b|Better reasoning. Good for complex commits and refactors.
-qwen3:14b|High quality reasoning for larger changes.
-qwen3:30b|Large model. Requires more RAM/VRAM.
-qwen3:32b|Very capable model for complex code changes.
-qwen3:235b|Maximum quality. Requires powerful hardware.
-
-qwen2.5:0.5b|Tiny general model. Only for very limited hardware.
-qwen2.5:1.5b|Small general assistant.
-qwen2.5:3b|Compact model for basic tasks.
-qwen2.5:7b|Reliable general purpose model.
-qwen2.5:14b|Stronger reasoning and coding.
-qwen2.5:32b|Large high quality model.
-qwen2.5:72b|Very large model.
-
-qwen2.5-coder:1.5b|Small coding model.
-qwen2.5-coder:3b|Compact coding assistant.
-qwen2.5-coder:7b|Good coding model for daily commits.
-qwen2.5-coder:14b|Strong coding understanding.
-qwen2.5-coder:32b|High quality coding model.
-
-deepseek-coder:6.7b|Code-focused model. Excellent for programming diffs.
-deepseek-coder-v2:16b|Advanced coding model. Great for large code changes and refactors.
-
-mistral:7b|Fast general model. Good quality with low resource usage.
-
-gemma3:4b|Small efficient model. Good for laptops and lightweight setups.
-
-llama3.1:8b|Strong general assistant. Good instruction following.
-llama3.1:70b|Large model. High quality but requires powerful hardware.
-
-phi4:14b|Reasoning-focused model. Good quality for its size.
+qwen3:4b|Recommended default. Excellent speed and quality balance for most users.
+qwen3:1.7b|Lightweight. Good for simple commits and small code changes.
+qwen3:0.6b|Ultra lightweight. Very fast, suitable for tiny diffs and low-end hardware.
+deepseek-coder:6.7b|Code-focused. Excellent at understanding diffs and generating commit messages.
+qwen3:8b|High quality. Better reasoning for complex commits, refactors, and larger changes.
+llama3.1:8b|Strong general model. Produces clear, natural commit messages.
+deepseek-coder-v2:16b|Best overall for coding. Outstanding for large diffs, refactors, and complex repositories.
 "
 
 
@@ -71,7 +43,7 @@ config_get()
 
     if [ -f "$CONFIG_FILE" ]; then
         value=$(grep "^${key}=" "$CONFIG_FILE" | cut -d '=' -f2-)
-    figet
+    fi
 
     if [ -n "$value" ]; then
         echo "$value"
@@ -111,7 +83,7 @@ config_set()
 set_model()
 {
     echo
-    echo "Available Qwen models:"
+    echo "Available Models:"
     echo
 
     i=1

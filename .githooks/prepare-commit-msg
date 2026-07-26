@@ -327,53 +327,6 @@ build_commit_message() {
     fi
 }
 
-
-# ----------------------------
-# ⚙️ System Checks
-# ----------------------------
-
-# Checks for available system RAM and VRAM and warns the user if it's low.
-check_resources() {
-    local free_ram_gb=$(free -g | awk '/^Mem:/ {print $7}')
-    local free_vram_gb=0
-    
-    if command -v nvidia-smi >/dev/null 2>&1; then
-        free_vram_gb=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | awk '{sum+=$1} END {print sum/1024}')
-    fi
-    free_vram_gb=${free_vram_gb:-0}
-
-    local ollama_used_gb=$(ollama ps 2>/dev/null | awk '
-        NR > 1 {
-            size=$3; unit=$4
-            if (unit == "GB") sum += size
-            else if (unit == "MB") sum += size / 1024
-        }
-        END { printf "%.2f", sum + 0 }
-    ')
-    ollama_used_gb=${ollama_used_gb:-0}
-
-    local total_mem_gb=$(awk "BEGIN {print $free_ram_gb + $free_vram_gb + $ollama_used_gb}")
-
-    if (( $(echo "$total_mem_gb < $REQUIRED_GB" | bc -l) )); then
-        print_tty "⚠️ Warning: Low memory detected (${total_mem_gb} GB available). Qwen 2.5 7B may run poorly."
-        read -r -p "Continue anyway? (Y/N): " choice < /dev/tty > /dev/tty
-
-        case "$choice" in
-            [Yy]*) print_tty "Continuing..." ;;
-            [Nn]*)
-                print_tty "Exiting..."
-                exit 1
-                ;;
-            *)
-                print_tty "Invalid choice. Exiting..."
-                exit 1
-                ;;
-        esac
-    fi
-}
-
-check_resources
-
 # ----------------------------
 # 🚫 Check if "ai" message
 # ----------------------------
