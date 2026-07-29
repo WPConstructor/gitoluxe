@@ -554,6 +554,14 @@ Ignore noise:
 - trivial renames
 - mechanical changes without behavioral impact
 
+Ignore comments that do not affect behavior, including lines beginning with:
+- #
+- //
+- /* ... */
+
+Treat these as comments/documentation unless they change executable behavior or parsing semantics.
+Do not classify comment-only changes as meaningful changes.
+
 Step 3:
 Classify changes:
 
