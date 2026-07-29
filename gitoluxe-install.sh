@@ -22,7 +22,13 @@ config_get()
     fi
 }
 
-echo "Checking if configurations set."
+LATEST_TAG=$(curl -s https://api.github.com/repos/WPConstructor/gitoluxe/tags \
+  | grep '"name"' \
+  | head -n 1 \
+  | cut -d '"' -f4)
+REPO_CONFIG_URL="https://raw.githubusercontent.com/WPConstructor/gitoluxe/$LATEST_TAG/gitoluxe.config.sh"
+
+echo "Checking if configurations set..."
 
 if [ ! -f "$CONFIG_FILE" ]; then
     bash gitoluxe.config.sh
@@ -34,11 +40,6 @@ echo "🚀 Installing Gitoluxe (Ollama + Model + Hooks)..."
 
 HOOK_DIR=".githooks"
 HOOK_FILE="$HOOK_DIR/prepare-commit-msg"
-
-LATEST_TAG=$(curl -s https://api.github.com/repos/WPConstructor/gitoluxe/tags \
-  | grep '"name"' \
-  | head -n 1 \
-  | cut -d '"' -f4)
 
 REPO_URL="https://raw.githubusercontent.com/WPConstructor/gitoluxe/$LATEST_TAG/.githooks/prepare-commit-msg"
 
@@ -62,13 +63,15 @@ else
 fi
 
 # -------------------------
-# 2. Pull Qwen2.5-coder:7b
+# 2. Pull configured model
 # -------------------------
-if ! ollama list | grep -q '^qwen2.5-coder:7b'; then
-    echo "🤖 Pulling qwen2.5-coder:7b..."
-    ollama pull qwen2.5-coder:7b
+MODEL=$(config_get "MODEL" "qwen2.5-coder:7b")
+
+if ! ollama list | grep -q "^${MODEL}"; then
+    echo "🤖 Pulling ${MODEL}..."
+    ollama pull "$MODEL"
 else
-    echo "✅ qwen2.5-coder:7b already installed"
+    echo "✅ ${MODEL} already installed"
 fi
 
 # -------------------------
@@ -120,7 +123,7 @@ echo "✅ Installation complete!"
 echo ""
 echo "📌 What was installed:"
 echo "   ✔ Ollama"
-echo "   ✔ Qwen2.5-Coder 7B"
+echo "   ✔ Model ($MODEL)"
 echo "   ✔ Git AI Hook"
 echo ""
 echo "👉 Usage:"
