@@ -41,18 +41,23 @@ MSGS_ADD=1
 # Common Variables
 # ============================
 
+# -- ANSI Foreground Color Escape Codes --
+# Used throughout the script for colored terminal output.
+# The $'...' syntax allows embedding escape sequences directly in variables.
 RED=$'\033[31m'
 GREEN=$'\033[32m'
-VIOLET=$'\033[38;5;129m'
-YELLOW=$'\033[38;5;226m'
-RESET=$'\033[0m'
+VIOLET=$'\033[38;5;129m'       # 256-color mode: purple/violet
+YELLOW=$'\033[38;5;226m'       # 256-color mode: bright yellow
+RESET=$'\033[0m'               # Resets all text formatting back to default
 BLACK=$'\033[30m'
-ORANGE=$'\033[38;5;208m'
+ORANGE=$'\033[38;5;208m'       # 256-color mode: orange
 
+# -- ANSI Background Color Escape Codes --
+# Used for highlighted/badge-style text (e.g., menu shortcut keys).
 BG_BLACK=$'\033[40m'
-BG_RED=$'\033[41m'
+BG_RED=$'\033[41m'             # Used for menu shortcut key highlighting
 BG_GREEN=$'\033[42m'
-BG_YELLOW=$'\033[103m'
+BG_YELLOW=$'\033[103m'         # Bright yellow background
 BG_BLUE=$'\033[44m'
 BG_MAGENTA=$'\033[45m'
 BG_CYAN=$'\033[46m'
@@ -65,12 +70,17 @@ BG_WHITE=$'\033[47m'
 # MODEL=$(config_get MODEL qwen3:4b)
 # --------------------------------------------------
 
+# Try to locate the config file. First look one directory up (when running
+# from .githooks/), then fall back to the current directory.
 CONFIG_FILE="../gitoluxe.config.env"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
     CONFIG_FILE="gitoluxe.config.env"
 fi
 
+# config_get KEY DEFAULT
+#   Reads a value from the gitoluxe config file.
+#   Falls back to DEFAULT if the key is not found or the file doesn't exist.
 config_get()
 {
     key="$1"
@@ -78,10 +88,12 @@ config_get()
 
     value=""
 
+    # Search for "KEY=value" lines in the config file
     if [ -f "$CONFIG_FILE" ]; then
         value=$(grep "^${key}=" "$CONFIG_FILE" | cut -d '=' -f2-)
     fi
 
+    # Return the found value, or the default if nothing was found
     if [ -n "$value" ]; then
         echo "$value"
     else
@@ -89,6 +101,10 @@ config_get()
     fi
 }
 
+# Load user-configurable settings from config file, with sensible defaults:
+#   MODEL           - The Ollama model to use for AI generation
+#   MAX_INPUT_CHARS - Maximum characters sent in the diff payload
+#   TEMPERATURE     - AI creativity parameter (0 = deterministic)
 MODEL=$(config_get MODEL qwen3:4b)
 MAX_INPUT_CHARS=$(config_get MAX_INPUT_CHARS 7000)
 TEMPERATURE=$(config_get TEMPERATURE 0)
@@ -101,39 +117,44 @@ TEMPERATURE=$(config_get TEMPERATURE 0)
 # Display (print) Functions
 # ----------------------------
 
+# Pauses execution and waits for the user to press any key.
+# Uses /dev/tty directly to ensure it works inside git hooks
+# where stdin/stdout may be redirected.
 press_continue(){
     printf "\nPress any key to continue..." > /dev/tty
-    IFS= read -r -n1 < /dev/tty
+    IFS= read -r -n1 < /dev/tty   # Read exactly 1 character, no delimiter
     printf "\n" > /dev/tty
 }
 
 # Displays the ASCII art title with color.
 print_title() {
-    local color="$VIOLET"
-    local version_color="$WHITE"
+    local color="$VIOLET"           # ASCII art is rendered in violet
+    local version_color="$WHITE"    # Version line gets a distinct white color
     local width line trimmed pad current_color
 
+    # Detect terminal width; default to 80 columns if tput fails
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
+    # Read each line of the heredoc ASCII art and center it
     while IFS= read -r line; do
-        # skip empty lines
+        # skip empty lines in the heredoc
         [ -z "$line" ] && continue
 
-        # truncate line to terminal width
+        # truncate line to terminal width to prevent wrapping
         trimmed="${line:0:width}"
 
-        # compute padding for centering
+        # compute left-padding to horizontally center the line
         pad=$(( (width - ${#trimmed}) / 2 ))
         [ "$pad" -lt 0 ] && pad=0
 
-        # Use white for version line
+        # Use white for the version/copyright line, violet for the logo
         if [[ "$line" == v1.* ]]; then
             current_color="$version_color"
         else
             current_color="$color"
         fi
 
-        # print centered line with color
+        # Print the centered, colored line directly to the terminal
         printf "%*s%b%s%b\n" \
             "$pad" "" \
             "$current_color" \
@@ -146,29 +167,43 @@ print_title() {
 /   \  ___|  \   __\/  _ \|  | |  |  \  \/  // __ \ 
 \    \_\  \  ||  | (  <_> )  |_|  |  />    <\  ___/ 
  \______  /__||__|  \____/|____/____//__/\_ \\___  >
-        \/                                 \/    \/ 
+         \/                                 \/    \/ 
 v1.0.0 (c) 2026 by WPConstructor - GPL-3.0-or-later License
 EOF
 }
 
-# prints a colored text in the middle of the window
+# Prints a single-line text string centered in the terminal with optional color.
+# Arguments:
+#   $1 - The text to display
+#   $2 - (optional) ANSI color code to apply
 print_center() {
     local text="$1"
     local color="$2"
     local width cols padding
 
+    # Get terminal width
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
+    # Calculate the visible length of the text (character count)
     cols=${#text}
 
+    # Calculate left-padding for centering
     padding=$(( (width - cols) / 2 ))
     [ "$padding" -lt 0 ] && padding=0
 
+    # Print with padding, color, text, and reset escape sequence
     printf "%*s%b%s%b\n" \
         "$padding" "" "$color" "$text" "\033[0m" > /dev/tty
 }
 
-# Prints a colored multi-line text centered as one block with word wrapping.
+# Prints a multi-line block of text centered as a cohesive unit in the terminal.
+# Long lines are word-wrapped using `fold -s`. All lines are then left-padded
+# uniformly so the block appears centered based on the longest wrapped line.
+#
+# Arguments:
+#   $1 - The text to display (may contain newlines)
+#   $2 - (optional) ANSI color code to apply
+#   $3 - (optional) Maximum line width before wrapping (defaults to terminal width - 4)
 print_multi_line_center() {
     local text="$1"
     local color="$2"
@@ -178,30 +213,31 @@ print_multi_line_center() {
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
     # Use provided max width or calculate from terminal width
+    # Leave 4 chars margin (2 on each side) for readability
     if [ -z "$max_width" ]; then
         max_width=$((width - 4))
     fi
 
-    # Limit max width to terminal width
+    # Clamp max width to terminal width to prevent overflow
     if [ "$max_width" -gt "$width" ]; then
         max_width=$((width - 4))
     fi
 
     [ "$max_width" -lt 1 ] && max_width=1
 
-    # Wrap long lines
+    # Word-wrap the text at word boundaries (-s) to max_width
     wrapped=$(printf '%s' "$text" | fold -s -w "$max_width")
 
-    # Find longest wrapped line
+    # First pass: find the longest wrapped line to determine centering offset
     while IFS= read -r line; do
         [ ${#line} -gt "$longest" ] && longest=${#line}
     done <<< "$wrapped"
 
-    # Calculate left padding for centering
+    # Calculate uniform left padding based on the longest line
     padding=$(( (width - longest) / 2 ))
     [ "$padding" -lt 0 ] && padding=0
 
-    # Print all wrapped lines centered with color
+    # Second pass: print each wrapped line with consistent left padding and color
     while IFS= read -r line; do
         printf "%*s%b%s%b\n" \
             "$padding" "" \
@@ -211,13 +247,16 @@ print_multi_line_center() {
     done <<< "$wrapped"
 }
 
-# Prints a message to the TTY, wrapped to the terminal width.
+# Prints a message to the TTY, word-wrapped to the terminal width.
+# Interprets escape sequences (e.g. \n, color codes) via echo -e.
 print_tty() {
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
     echo -e "$@" | fold -s -w "$width" > /dev/tty
 }
 
-# Prints a message to the TTY, wrapped and with a 1-space indent on subsequent lines.
+# Prints a message to the TTY with word wrapping.
+# Continuation lines (2nd line onward) receive a 1-space indent
+# to visually indicate they belong to the same logical line.
 print_tty_indent_1() {
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
@@ -227,7 +266,9 @@ print_tty_indent_1() {
         > /dev/tty
 }
 
-# Prints a message to the TTY, wrapped and with a 5-space indent on subsequent lines.
+# Prints a message to the TTY with word wrapping.
+# Continuation lines (2nd line onward) receive a 5-space indent,
+# useful for list-style formatting where items need deeper indentation.
 print_tty_indent_5() {
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
@@ -238,6 +279,8 @@ print_tty_indent_5() {
 }
 
 # Displays a colored horizontal line separator spanning the terminal width.
+# The separator is a series of dashes with 1 space padding on each side,
+# rendered in the brand violet color for visual consistency.
 print_separator() {
     local color="$VIOLET"
     local width char inner line
@@ -245,13 +288,15 @@ print_separator() {
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
     char="-"
 
-    # leave 1 space left + 1 space right
+    # Reserve 1 space on each side for breathing room
     inner=$((width - 2))
     [ "$inner" -lt 1 ] && inner=1
 
+    # Build the dash line: create a string of spaces, then replace each with '-'
     printf -v line '%*s' "$inner" ''
     line=${line// /$char}
 
+    # Print the colored separator line
     printf "%b %s %b\n" "$color" "$line" "\033[0m" > /dev/tty
 }
 
@@ -259,36 +304,47 @@ print_separator() {
 # Menu Functions
 # ----------------------------
 
-# Print a centered, responsive multi-column menu in the terminal
+# Prints a centered, responsive multi-column menu in the terminal.
+# Reads from the global array `menu_items` and automatically determines
+# the number of columns based on terminal width (each column ~20 chars wide).
+# Shortcut letters inside square brackets (e.g. [C]) are highlighted
+# with a red background for visual emphasis.
 print_menu() {
     local width cols i j item len pad line cell
 
+    # Detect terminal width
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
+    # Calculate number of columns that fit (each ~20 chars wide)
     cols=$(( width / 20 ))
     [ "$cols" -lt 1 ] && cols=1
 
+    # Track the maximum width of items in each column for alignment
     declare -a col_max
 
     for ((i=0; i<cols; i++)); do
         col_max[i]=0
     done
 
-    # Calculate widths without ANSI codes
+    # First pass: determine the widest item in each column
+    # Note: this measures raw string length (ANSI codes are added later)
     for i in "${!menu_items[@]}"; do
         col=$(( i % cols ))
         len=${#menu_items[i]}
         [ "$len" -gt "${col_max[col]}" ] && col_max[col]=$len
     done
 
+    # Calculate total row width to determine centering offset
     local row_width=0
     for ((i=0; i<cols; i++)); do
-        row_width=$(( row_width + col_max[i] + 2 ))
+        row_width=$(( row_width + col_max[i] + 2 ))  # +2 for inter-column gap
     done
 
+    # Center the entire menu block horizontally
     pad=$(( (width - row_width) / 2 + 1 ))
     [ "$pad" -lt 0 ] && pad=0
 
+    # Second pass: render each row of menu items
     i=0
     while [ $i -lt ${#menu_items[@]} ]; do
         line=""
@@ -297,18 +353,21 @@ print_menu() {
             if [ $((i + j)) -lt ${#menu_items[@]} ]; then
                 item="${menu_items[i+j]}"
 
-                # Color only the shortcut letter inside brackets
+                # Highlight the shortcut key: replace [X] with [<red>X</red>]
                 item=$(printf '%s' "$item" | sed \
                     "s/\[\([^]]\)\]/[${BG_RED}\1${RESET}]/")
 
+                # Pad item to its column width for alignment
                 printf -v cell "%-*s" "${col_max[j]}" "$item"
             else
+                # Empty cell for incomplete last row
                 printf -v cell "%-*s" "${col_max[j]}" ""
             fi
 
             line+="$cell  "
         done
 
+        # Print the centered row
         printf "%*s%s\n" "$pad" "" "$line" > /dev/tty
 
         i=$((i + cols))
@@ -319,78 +378,115 @@ print_menu() {
 # String Utilities
 # ----------------------------
 
-# Constructs the final commit message from a subject and an optional body.
+# Constructs the final commit message string in Conventional Commits format.
+# Format: type(scope): subject
+#
+# If a body is provided, it is appended after a blank line (per git convention):
+#   type(scope): subject
+#
+#   body text here
+#
+# Arguments:
+#   $1 - Conventional commit type (e.g., feat, fix, refactor)
+#   $2 - Scope of the change (e.g., auth, ui, core)
+#   $3 - Subject line (imperative mood description of the change)
+#   $4 - (optional) Body text with additional details
 build_commit_message() {
     local type="$1"
     local scope="$2"
     local subject="$3"
     local body_msg="$4"
 
+    # Subject-only commit (no body)
     if [ -z "$body_msg" ]; then
         printf "%s\n" "$type($scope):$subject"
     else
+        # Subject + blank line + body (standard git multi-line commit format)
         printf "%s\n\n%s\n" "$type($scope):$subject" "$body_msg"
     fi
 }
 
 # ----------------------------
-# 🚫 Check if "ai" message
+# 🚫 Guard Checks: Decide Whether to Run AI Generation
 # ----------------------------
 
+# Git provides these positional arguments to the prepare-commit-msg hook:
+#   $1 - Path to the temporary file containing the commit message
+#   $2 - Source of the commit message (message, template, merge, squash, commit)
+#   $3 - SHA of the commit being amended (only for amend)
 COMMIT_MSG_FILE="$1"
 SOURCE="$2"
 
+# Skip AI generation for merge commits, squash commits, and template-based
+# commits — these already have pre-defined messages that shouldn't be overwritten.
 case "$SOURCE" in
     merge|squash|template)
         print_tty "Skipping AI commit generation ($SOURCE)"
         exit 0
         ;;
     commit|amend)
+        # Mark as amend so we know to look at HEAD for diff data later
         is_amend=1
         ;;
 esac
 
+# Read the current commit message from the temp file.
+# Only proceed if the message is empty or literally "ai" (the trigger keyword).
+# Any other message means the user provided their own — don't interfere.
 existing_msg=$(cat "$COMMIT_MSG_FILE" 2>/dev/null)
 
 case "$existing_msg" in
     "ai"|"")
+        # Empty or "ai" trigger — proceed with AI generation
         ;;
     *)
+        # User-provided message — exit without modifying
         exit 0
         ;;
 esac
 
-# Prevent running interactive commands when /dev/tty is not available
+# Interactive mode requires a TTY. If /dev/tty is unavailable (e.g., in CI/CD
+# pipelines or non-interactive environments), exit silently.
 if [ ! -e /dev/tty ]; then
     exit 0
 fi
 
 # ---------------------------------
-# 📦 Collect data needed for prompt
+# 📦 Collect Staged Data for AI Prompt
 # ---------------------------------
+# Gather three views of the staged changes to give the AI comprehensive context:
+#   1. staged_files - File-level change summary (Added/Modified/Deleted)
+#   2. staged_stat  - Insertion/deletion statistics per file
+#   3. staged_diff  - Actual code diff (truncated to MAX_INPUT_CHARS)
 
 staged_files=$(git diff --cached --name-status)
 staged_stat=$(git diff --cached --stat)
 staged_diff=$(git diff --cached --unified=1 --no-color | head -c "$MAX_INPUT_CHARS")
 
+# SHA is provided by git for amend operations (3rd positional arg)
 SHA="$3"
 
-# If nothing staged, check commit context (amend / override)
+# If nothing is staged (e.g., during an amend), fall back to inspecting HEAD.
+# This ensures AI generation works for `git commit --amend` scenarios too.
 if [ -z "$staged_files" ]; then
+    # Use `git show` to get the last commit's changes (--format="" suppresses commit header)
     staged_files=$(git show --name-status --format="" HEAD 2>/dev/null | head -c "$MAX_INPUT_CHARS")
     staged_stat=$(git show --stat --format="" HEAD 2>/dev/null | head -c "$MAX_INPUT_CHARS")
     staged_diff=$(git diff HEAD --unified=1 --no-color 2>/dev/null | head -c "$MAX_INPUT_CHARS")
 
+    # Last resort: if diff against HEAD is empty, show the HEAD commit diff directly
     if [ -z "$staged_diff" ]; then
         staged_diff=$(git show --unified=1 --no-color HEAD 2>/dev/null | head -c "$MAX_INPUT_CHARS")
     fi
     is_amend=1
 fi
 
+# Nothing to commit — no staged files found anywhere, so exit
 if [ -z "$staged_files" ]; then
     exit 0
 fi
 
+# Track diff length and append a truncation notice if the diff was cut short
 diff_len=${#staged_diff}
 [ "$diff_len" -eq "$MAX_INPUT_CHARS" ] && staged_diff="${staged_diff}\n\n... (truncated)"
 
@@ -398,6 +494,14 @@ diff_len=${#staged_diff}
 # AI Prompts & Data
 # ----------------------------
 
+# Build the diff payload that will be sent to the AI model.
+# This combines the three data sources into a structured text block.
+# The sed pipeline at the end sanitizes comment syntax in diff lines:
+#   - Lines starting with +/- followed by # (bash/python comments)
+#   - Lines starting with +/- followed by // (C-style line comments)
+#   - Lines starting with +/- followed by /* (C-style block comments)
+# These are replaced with "COMMENT:" to prevent the AI from misinterpreting
+# code comments as prompt instructions (prompt injection prevention).
 diff_payload=$(printf "
 STAGED FILES (IMPORTANT):
 %s
@@ -755,10 +859,21 @@ Return ONLY the JSON object."
 # 🧠 AI generator functions
 # ----------------------------
 
-# Gets the description for a given conventional commit type.
+# Looks up and prints the human-readable description for a given Conventional
+# Commit type. This is used in the interactive menu when the user wants to
+# understand what each commit type means before selecting one.
+#
+# Arguments:
+#   $1 - The commit type to look up (e.g., "feat", "fix", "refactor")
+#
+# Returns:
+#   0 if the type was found (description printed to stdout)
+#   1 if the type was not recognized
 get_type_desc() {
     choice="$1"
 
+    # Parallel arrays: types[i] maps to descs[i]
+    # All 21 Conventional Commit types supported by Gitoluxe
     types=("feat" "fix" "refactor" "style" "docs" "test" "perf" "chore" "release" "remove" "build" "ci" "security" "i18n" "deps" "hotfix" "ui" "merge" "revert" "move" "cleanup")
 
     descs=(
@@ -785,6 +900,7 @@ get_type_desc() {
         "General cleanup of codebase and minor improvements. Includes small refactors, simplifications, or removals. Does not affect behavior."
     )
 
+    # Linear search through the types array to find a match
     i=0
     while [ $i -lt ${#types[@]} ]; do
         if [ "${types[$i]}" = "$choice" ]; then
@@ -794,15 +910,23 @@ get_type_desc() {
         i=$((i + 1))
     done
 
+    # Type not found in our list
     return 1
 }
 
-# Displays the interactive menu options.
+# Displays a legacy interactive menu with available actions.
+# NOTE: This appears to be an older version of the menu renderer, superseded
+# by the run_menu() function which uses the print_menu() helper with the
+# `menu_items` array. Retained for potential fallback or reference.
+#
+# Uses a fixed-width column layout (24 chars each) and auto-calculates
+# the number of columns based on terminal width.
 do_menu() {
     local width cols i items count col_width
 
     width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
 
+    # Define all available menu actions with their shortcut keys
     items=(
         " [1-$total_ai_msg] Accept"
         " [A] Add Suggestions"
@@ -819,43 +943,68 @@ do_menu() {
 
     count=${#items[@]}
 
-    # compute best column count (at least 1 column)
+    # Each column is 24 characters wide; calculate how many fit
     col_width=24
     cols=$(( width / col_width ))
     [ "$cols" -lt 1 ] && cols=1
 
+    # Blank line before the menu for spacing
     echo "" > /dev/tty
 
+    # Print each item, wrapping to the next line after filling all columns
     for ((i=0; i<count; i++)); do
         printf "%-${col_width}s" "${items[i]}"
 
-        # line break after reaching column limit
+        # Insert a newline after every `cols` items to start a new row
         if (( (i + 1) % cols == 0 )); then
             printf "\n"
         fi
     done
 }
 
+# ============================
+# Global State Variables
+# ============================
+
+# Flag to indicate whether AI needs to (re-)generate suggestions.
+# 1 = needs generation, 0 = already generated.
 regen_ai=1
+
+# Total number of AI-generated suggestions currently available.
 total_ai_msg=0
+
+# Human-readable string showing how long the last AI generation took (e.g., "3s").
 gen_time_info=""
 
-# New global variables for scope functionality
-selected_scope=""
-unique_scopes=()
-declare -A scope_map
+# -- Scope Tracking --
+# These track unique scopes encountered across AI suggestions,
+# allowing the user to select from previously-seen scopes.
+selected_scope=""       # The scope currently chosen by the user (empty = use AI's default)
+unique_scopes=()        # Ordered list of unique scope strings seen so far
+declare -A scope_map    # Associative array for O(1) scope deduplication
 
-# Function to parse commit message into type, scope, and description
+# Parses a Conventional Commit message string into its three components.
+# Input format: "type(scope): description" or "type: description"
+#
+# Outputs three lines to stdout (consumed via readarray):
+#   Line 1: type      (e.g., "feat")
+#   Line 2: scope     (e.g., "auth", may be empty)
+#   Line 3: description (e.g., "add login endpoint")
+#
+# Arguments:
+#   $1 - The commit message string to parse
 parse_commit_message() {
     local msg="$1"
     local _type=""
     local _scope=""
     local _description="$msg" # Default to full message as description
 
+    # Try to match "type(scope): description" pattern first
     if [[ "$msg" =~ ^([^(:[:space:]]+)\(([^)]*)\):[[:space:]]*(.*)$ ]]; then
         _type="${BASH_REMATCH[1]}"
         _scope="${BASH_REMATCH[2]}"
         _description="${BASH_REMATCH[3]}"
+    # Fall back to "type: description" pattern (no scope)
     elif [[ "$msg" =~ ^([^:]+):[[:space:]]*(.*)$ ]]; then
         _type="${BASH_REMATCH[1]}"
         _description="${BASH_REMATCH[2]}"
@@ -864,10 +1013,12 @@ parse_commit_message() {
     echo "$_scope"
     echo "$_description"
 }
-selected_type=""
-body_time_info=""
-body_msg=""
-new_msg=""
+
+# -- Additional Global State --
+selected_type=""    # The commit type currently chosen by the user
+body_time_info=""   # How long body generation took (for debug display)
+body_msg=""         # The commit body text (multi-line details)
+new_msg=""          # Temporary status/error message shown once in the next menu render
 
 # ============================
 # Main Menu
@@ -877,11 +1028,27 @@ new_msg=""
 # AI Functions (Step 1)
 # ----------------------------
 
-# Generates the commit message subject using Ollama.
+# Sends the diff payload to the Ollama API and retrieves a structured
+# JSON response containing a Conventional Commit message.
+#
+# The function:
+#   1. Strips ANSI escape codes from the diff (clean_diff_payload)
+#   2. Removes non-printable control characters
+#   3. Sends the cleaned diff + system prompt to Ollama via its HTTP API
+#   4. Uses JSON schema enforcement (format field) to ensure valid output
+#
+# Returns: Raw JSON response from Ollama (use `jq -r '.response'` to extract)
 generate_subject() {
+    # Sanitize the diff payload:
+    #   - Remove ANSI escape sequences (color codes from git diff --color)
+    #   - Strip non-printable control characters (NUL, BEL, BS, etc.)
+    #     but preserve \n (012) and \r (015)
     clean_diff_payload=$(printf '%s' "$diff_payload" \
     | sed $'s/\x1B\\[[0-9;?]*[ -\\/]*[@-~]//g' \
     | tr -d '\000-\010\013\014\016-\037')
+    # Send the prompt + diff to Ollama's generate endpoint.
+    # The `format` field enforces JSON schema validation on the response,
+    # ensuring the AI returns exactly the fields we need.
     curl -s http://localhost:11434/api/generate \
         -H "Content-Type: application/json" \
         -d "$(jq -n \
@@ -929,53 +1096,76 @@ generate_subject() {
         )"
 }
 
+# Ensures the Ollama server is running before making API requests.
+# If the server isn't responding, starts it as a background process
+# and polls every 200ms until it becomes available.
 start_ollama() {
+    # Check if Ollama is already running by hitting the /api/tags endpoint
     if ! curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
         echo "Starting Ollama..."
+        # Launch Ollama in the background, logging to /tmp
         ollama serve >/tmp/ollama.log 2>&1 &
 
+        # Wait for Ollama to become responsive before proceeding
         until curl -s http://localhost:11434/api/tags >/dev/null 2>&1; do
             sleep 0.2
         done
     fi
 }
 
-# Generates a batch of commit message suggestions and sorts them longest first.
+# Orchestrates the full AI message generation pipeline.
+# Shows a loading screen, calls Ollama, parses the JSON response,
+# and plays an audible notification when done.
+#
+# Sets global variables: NEW_TYPE, NEW_SCOPE, NEW_SUBJECT, NEW_BODY
 generate_ai_message() {
+    # Ensure the AI server is running
     start_ollama
 
+    # Clear screen and show the branded header with a loading message
     clear
 
     print_title
     echo ""
 
     print_center "Generating commit message..." "$RED"
+    # Call Ollama and extract the response JSON string from the wrapper
     json_msg=$(generate_subject | jq -r '.response')
+    # Parse each field from the AI-generated JSON into global variables
     NEW_TYPE=$(printf '%s' "$json_msg" | jq -r '.type')
     NEW_SCOPE=$(printf '%s' "$json_msg" | jq -r '.scope')
     NEW_SUBJECT=$(printf '%s' "$json_msg" | jq -r '.subject')
-    NEW_SUBJECT="${NEW_SUBJECT,}"
+    NEW_SUBJECT="${NEW_SUBJECT,}"  # Lowercase the first character (imperative mood style)
     NEW_BODY=$(printf '%s' "$json_msg" | jq -r '.body')
     
+    # Play 3 terminal bell sounds to audibly notify the user that generation is complete
     for i in {1..3}; do
         tput bel
         sleep 0.3
     done
 }
 
+# Wrapper function that generates AI suggestions and tracks timing/scope metadata.
+# This is the main entry point called from the menu loop when new suggestions are needed.
 add_message_suggestions() {
+    # Start a timer to measure generation duration
     start_t=$SECONDS
 
+    # Generate the AI commit message
     generate_ai_message
 
+    # Parse the first AI message to extract its scope for the scope selector
     readarray -t parsed_parts < <(parse_commit_message "$AI_MSG_1")
     current_scope="${parsed_parts[1]}"
 
+    # Track unique scopes for the scope selection menu
+    # Only add if the scope is non-empty and hasn't been seen before
     if [ -n "$current_scope" ] && [ -z "${scope_map[$current_scope]}" ]; then
         unique_scopes+=("$current_scope")
         scope_map[$current_scope]=1
     fi
 
+    # Record timing info for the debug display and mark generation as complete
     gen_time_info="$((SECONDS - start_t))s"
     regen_ai=0
 }
@@ -984,10 +1174,20 @@ add_message_suggestions() {
 # Menu functions
 # ----------------------------
 
-# Checks if a given choice is a valid number within a given range.
+# Validates that a user's numeric choice falls within the expected range [1, max].
+# Used to verify selection of AI suggestion numbers.
+#
+# Arguments:
+#   $1 - The user's input string
+#   $2 - Maximum valid number
+#
+# Returns:
+#   0 if valid (is a number and within range)
+#   1 if invalid
 check_choice() {
     local choice="$1"
     local max="$2"
+    # Regex check for digits only, then range check
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$max" ]; then
         return 0
     else
@@ -995,29 +1195,39 @@ check_choice() {
     fi
 }
 
-# Ask a Yes/No confirmation question using /dev/tty.
+# Displays the edited commit message and asks the user to confirm, reject, or
+# go back to the editor. Uses a polling loop until a valid answer is given.
+#
+# Reads the global variable: NEW_COMMIT (the edited message to display)
+#
+# Returns:
+#   1 - User confirmed (Y): commit the edited message
+#   2 - User rejected (N): discard edits and return to main menu
+#   3 - User chose Back (B): re-open the editor for further edits
 confirm_commit_message() {
     local choice
 
     while true; do
+        # Redraw the screen with the edited commit message
         clear
         print_title
         print_separator
         print_multi_line_center "$NEW_COMMIT"
         print_separator
         echo ""
+        # Prompt with all three options
         printf "Do you want to commit this message? If you choose No, the commit message will be reset. (Y/N/B[Back to Editor]): " > /dev/tty
         read -r choice < /dev/tty
 
         case "$choice" in
             [Yy])
-                return 1
+                return 1  # Confirmed — use this message
                 ;;
             [Nn])
-                return 2
+                return 2  # Rejected — discard and go back to main menu
                 ;;
             [Bb])
-                return 3
+                return 3  # Back — re-open the editor
                 ;;
             *)
                 printf "Please answer Y,N or B.\n" > /dev/tty
@@ -1030,26 +1240,42 @@ confirm_commit_message() {
 # Main Menu Loop
 # ----------------------------
 
+# Initial setup: clear the screen and generate the first AI suggestion
 clear
 add_message_suggestions
 
+# Main interactive menu loop.
+# This is the primary user-facing UI. It displays the current AI-generated
+# commit message (type, scope, subject, body) and lets the user:
+#   [S] Show the staged changes (git diff)
+#   [C] Commit with the current message
+#   [E] Edit the message in $EDITOR (default: nano)
+#   [R] Remove the body text
+#   [D] Show debug info (generation time, diff size)
+#   [X] Cancel and abort the commit
 run_menu(){
     local new_message_msg=""
 
     while true; do
 
+        # Redraw the full UI on each iteration
         clear
 
+        # -- Header & Current Message Display --
         print_title
         print_separator
+        # Show the subject line in yellow
         print_center "Subject:" "${YELLOW}"
         print_center "$NEW_TYPE($NEW_SCOPE): $NEW_SUBJECT"
+        # Show the body section only if there is a body
         if [ "$NEW_BODY" != "" ]; then
             print_separator
             print_center "Body:" "${YELLOW}"
             print_multi_line_center "$NEW_BODY" "$RESET" 85
         fi
         print_separator
+
+        # -- Menu Options --
         menu_items=(
             "[S] Show Changes"
             "[C] Commit"
@@ -1061,58 +1287,79 @@ run_menu(){
 
         print_menu
         print_separator
+
+        # Display any one-time notification message (set from previous iteration)
         if [ -n "$new_message_msg" ]; then
             print_tty_indent_1 "$new_message_msg"
             print_separator
-            new_message_msg=""
+            new_message_msg=""  # Clear after showing once
         fi
 
+        # Display any one-time status message (e.g., debug info, errors)
         if [ "$new_msg" != "" ]; then
             print_center "$new_msg"
-            new_msg=""
+            new_msg=""  # Clear after showing once
         fi
 
+        # -- User Input --
         printf " ? " > /dev/tty
+        # Read the user's choice; default to "1" if stdin is closed/EOF
         if ! IFS= read -r choice < /dev/tty; then
             choice="1"
         fi
+        # Normalize to lowercase for case-insensitive matching
         choice=$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')
+
+        # -- Handle User Selection --
         case "$choice" in
             c)
+                # [C] Commit: build the final message and write it to the commit file
                 final_msg=$(build_commit_message "$NEW_TYPE" "$NEW_SCOPE" "$NEW_SUBJECT" "$NEW_BODY")
                 printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
-                exit 0
+                exit 0  # Success — git will use this message
             ;;
             e)
+                # [E] Edit: write current message to file and open in user's editor
                 final_msg=$(build_commit_message "$NEW_TYPE" "$NEW_SCOPE" "$NEW_SUBJECT" "$NEW_BODY")
                 printf "%s" "$final_msg" > "$COMMIT_MSG_FILE"
 
+                # Editor loop: allows re-editing if the user chooses "Back"
                 while true; do
+                    # Open the commit message file in the user's preferred editor
+                    # (falls back to nano if $EDITOR is not set)
                     "${EDITOR:-nano}" "$COMMIT_MSG_FILE" < /dev/tty > /dev/tty 2> /dev/tty
 
+                    # Check if the user actually changed the message
                     if ! cmp -s "$COMMIT_MSG_FILE" <(printf "%s" "$final_msg"); then
+                        # Message was modified — ask for confirmation
                         NEW_COMMIT="$(<"$COMMIT_MSG_FILE")"
                         confirm_commit_message
                         confirm_return=$?
 
                         case "$confirm_return" in
                             1)
+                                # Y = Confirmed — use the edited message as-is
                                 printf "Using edited commit message\n" > /dev/tty
                                 exit 0
                                 ;;
                             2)
+                                # N = Rejected — discard edits, return to main menu
                                 continue 2
                                 ;;
                             3)
+                                # B = Back — re-open the editor for more changes
                                 continue
                                 ;;
                         esac
                     fi
+                    # If the user didn't change anything, return to the main menu
                     continue 2;
                 done
             ;;
             s)
+                # [S] Show Changes: display the staged diff in the terminal
                 clear
+                # Try staged changes first, then HEAD diff, then last commit
                 if git diff --cached | grep -q .; then
                     git diff --cached
                 elif git diff HEAD | grep -q .; then
@@ -1120,18 +1367,22 @@ run_menu(){
                 else
                     git show --unified=1 --no-color HEAD
                 fi
-                press_continue
+                press_continue  # Wait for user to finish reading
             ;;
             r)
-              NEW_BODY="";
+                # [R] Remove Body: clear the body text (subject-only commit)
+                NEW_BODY="";
             ;;
             d)
+                # [D] Debug: show generation timing and diff size info
                 new_msg="Generation took $gen_time_info of $diff_len characters"
             ;;
             x)
+                # [X] Cancel: abort the commit entirely
                 exit 1
             ;;
             *)
+                # Invalid input — show error on next render
                 new_msg="❌ Invalid input. Enter s,c,e,r,d or x" 
             ;;
         esac
@@ -1139,4 +1390,5 @@ run_menu(){
 
 }
 
+# Start the interactive menu
 run_menu
