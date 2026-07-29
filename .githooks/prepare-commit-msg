@@ -65,6 +65,12 @@ BG_WHITE=$'\033[47m'
 # MODEL=$(config_get MODEL qwen3:4b)
 # --------------------------------------------------
 
+CONFIG_FILE="../gitoluxe.config.env"
+
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    CONFIG_FILE="gitoluxe.config.env"
+fi
+
 config_get()
 {
     key="$1"
@@ -749,11 +755,6 @@ Return ONLY the JSON object."
 # 🧠 AI generator functions
 # ----------------------------
 
-# Generates the commit message body using Ollama.
-generate_body() {
-    printf "%s" "$clean_diff_payload" | OLLAMA_KEEP_ALIVE=30m ollama run qwen-commit "$BODY_PROMPT"
-}
-
 # Gets the description for a given conventional commit type.
 get_type_desc() {
     choice="$1"
@@ -884,7 +885,7 @@ generate_subject() {
     curl -s http://localhost:11434/api/generate \
         -H "Content-Type: application/json" \
         -d "$(jq -n \
-            --arg model "qwen2.5-coder:7b" \
+            --arg model "$MODEL" \
             --arg prompt "${SUBJECT_PROMPT}
 
     DIFF:
@@ -893,6 +894,7 @@ generate_subject() {
             '{
                 model: $model,
                 prompt: $prompt,
+                think: false,
                 options: {
                     temperature: $temperature
                 },
@@ -948,7 +950,6 @@ generate_ai_message() {
     echo ""
 
     print_center "Generating commit message..." "$RED"
-
     json_msg=$(generate_subject | jq -r '.response')
     NEW_TYPE=$(printf '%s' "$json_msg" | jq -r '.type')
     NEW_SCOPE=$(printf '%s' "$json_msg" | jq -r '.scope')
