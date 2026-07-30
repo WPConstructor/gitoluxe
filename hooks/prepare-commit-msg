@@ -70,13 +70,8 @@ BG_WHITE=$'\033[47m'
 # MODEL=$(config_get MODEL qwen3:4b)
 # --------------------------------------------------
 
-# Try to locate the config file. First look one directory up (when running
-# from .githooks/), then fall back to the current directory.
-CONFIG_FILE="../gitoluxe.config.env"
-
-if [[ ! -f "$CONFIG_FILE" ]]; then
-    CONFIG_FILE="gitoluxe.config.env"
-fi
+GITOLUXE_DIR="$HOME/gitoluxe"
+CONFIG_FILE="$GITOLUXE_DIR/gitoluxe.config.env"
 
 # config_get KEY DEFAULT
 #   Reads a value from the gitoluxe config file.
@@ -562,6 +557,14 @@ Ignore comments that do not affect behavior, including lines beginning with:
 Treat these as comments/documentation unless they change executable behavior or parsing semantics.
 Do not classify comment-only changes as meaningful changes.
 
+Treat Markdown files (*.md) as documentation only.
+
+Markdown files:
+- Do not consider .md file changes as code or behavioral changes.
+- If a diff only changes .md files, classify the commit type as docs.
+- If .md files change alongside code changes, treat them as secondary documentation changes and include them in the body when meaningful.
+- Ignore Markdown formatting-only changes, whitespace-only changes, and cosmetic documentation edits.
+
 Step 3:
 Classify changes:
 
@@ -675,6 +678,8 @@ TYPE DECISION RULES:
   refactor, docs, style, test, chore, cleanup, deps.
 - Do not use feat only because code was added.
 - Do not use refactor when behavior changed.
+- Documentation-only changes in Markdown files (*.md) -> docs.
+- Do not use docs when Markdown changes accompany a primary code behavior change; include documentation updates as secondary changes in the body.
 
 SCOPE RULES:
 
@@ -719,6 +724,7 @@ package.json dependency changes -> deps
 shared utilities -> core
 configuration changes -> config
 unknown project-wide changes -> core
+*.md documentation changes -> docs
 
 Allowed scopes:
 
