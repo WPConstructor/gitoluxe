@@ -2,7 +2,19 @@
 
 set -e
 
-CONFIG_FILE="gitoluxe.config.env"
+# --------------------------------------------------
+# Paths
+# --------------------------------------------------
+
+GITOLUXE_DIR="$HOME/gitoluxe"
+HOOKS_DIR="$GITOLUXE_DIR/hooks"
+CONFIG_FILE="$GITOLUXE_DIR/gitoluxe.config.env"
+CONFIG_SCRIPT="$GITOLUXE_DIR/gitoluxe.config.sh"
+HOOK_FILE="$HOOKS_DIR/prepare-commit-msg"
+
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
 
 config_get()
 {
@@ -22,112 +34,172 @@ config_get()
     fi
 }
 
+# --------------------------------------------------
+# Resolve latest tag from GitHub
+# --------------------------------------------------
+
+echo "🔍 Fetching latest Gitoluxe release tag..."
+
 LATEST_TAG=$(curl -s https://api.github.com/repos/WPConstructor/gitoluxe/tags \
   | grep '"name"' \
   | head -n 1 \
   | cut -d '"' -f4)
+
+if [ -z "$LATEST_TAG" ]; then
+    echo "❌ Could not determine the latest tag from GitHub."
+    exit 1
+fi
+
+echo "   Latest tag: $LATEST_TAG"
+
+# ==================================================
+# 1. Create $HOME/gitoluxe directory
+# ==================================================
+
+echo ""
+echo "📁 Ensuring $GITOLUXE_DIR exists..."
+mkdir -p "$GITOLUXE_DIR"
+echo "   ✔ $GITOLUXE_DIR"
+
+# ==================================================
+# 2. Download gitoluxe.config.sh (if not present)
+# ==================================================
+
 REPO_CONFIG_URL="https://raw.githubusercontent.com/WPConstructor/gitoluxe/$LATEST_TAG/gitoluxe.config.sh"
 
-echo "Checking if configurations set..."
+if [ ! -f "$CONFIG_SCRIPT" ]; then
+    echo ""
+    echo "⬇️  Downloading gitoluxe.config.sh..."
+    curl -fsSL "$REPO_CONFIG_URL" -o "$CONFIG_SCRIPT"
+    chmod +x "$CONFIG_SCRIPT"
+    echo "   ✔ Saved to $CONFIG_SCRIPT"
+else
+    echo ""
+    echo "✅ gitoluxe.config.sh already exists"
+fi
+
+# ==================================================
+# 3. Install Ollama (if not installed)
+# ==================================================
+
+echo ""
+if ! command -v ollama &>/dev/null; then
+    echo "📦 Installing Ollama..."
+    curl -fsSL https://ollama.com/install.sh | sh
+else
+    echo "✅ Ollama already installed"
+fi
+
+# ==================================================
+# 4. Run configuration wizard (if env not present)
+# ==================================================
 
 if [ ! -f "$CONFIG_FILE" ]; then
-    bash gitoluxe.config.sh
-else 
-  echo "✅ Configurations have been set."   
-fi
-
-echo "🚀 Installing Gitoluxe (Ollama + Model + Hooks)..."
-
-HOOK_DIR=".githooks"
-HOOK_FILE="$HOOK_DIR/prepare-commit-msg"
-
-REPO_URL="https://raw.githubusercontent.com/WPConstructor/gitoluxe/$LATEST_TAG/.githooks/prepare-commit-msg"
-
-# -------------------------
-# 0. Check Git repository
-# -------------------------
-if [ ! -d ".git" ]; then
-  echo "❌ Git is not initialized in this directory."
-  echo "Please run git init and rerun the installer."
-  exit 1
-fi
-
-# -------------------------
-# 1. Install Ollama
-# -------------------------
-if ! ollama --version >/dev/null 2>&1; then
-  echo "📦 Installing Ollama..."
-  curl -fsSL https://ollama.com/install.sh | sh
+    echo ""
+    echo "⚙️  Running Gitoluxe configuration wizard..."
+    bash "$CONFIG_SCRIPT"
 else
-  echo "✅ Ollama already installed"
+    echo ""
+    echo "✅ Configuration already set ($CONFIG_FILE)"
 fi
 
-# -------------------------
-# 2. Pull configured model
-# -------------------------
+# ==================================================
+# 5. Pull configured model (if not installed)
+# ==================================================
+
 MODEL=$(config_get "MODEL" "qwen3:4b")
 
+echo ""
 if ! ollama list | grep -q "^${MODEL}"; then
-    echo "🤖 Pulling ${MODEL}..."
+    echo "🤖 Pulling model ${MODEL}..."
     ollama pull "$MODEL"
 else
-    echo "✅ ${MODEL} already installed"
+    echo "✅ Model ${MODEL} already installed"
 fi
 
-# -------------------------
-# 3. Create git hooks directory
-# -------------------------
-echo "📁 Creating .githooks directory..."
-mkdir -p "$HOOK_DIR"
+# ==================================================
+# 6. Create hooks directory
+# ==================================================
 
-# -------------------------
-# 4. Hook install logic
-# -------------------------
+echo ""
+echo "📁 Ensuring $HOOKS_DIR exists..."
+mkdir -p "$HOOKS_DIR"
+echo "   ✔ $HOOKS_DIR"
+
+# ==================================================
+# 7. Download prepare-commit-msg hook
+# ==================================================
+
+REPO_HOOK_URL="https://raw.githubusercontent.com/WPConstructor/gitoluxe/$LATEST_TAG/hooks/prepare-commit-msg"
+
+echo ""
 if [ -f "$HOOK_FILE" ]; then
-    echo "⚠️ Hook already exists: $HOOK_FILE"
+    echo "⚠️  Hook already exists: $HOOK_FILE"
 
     printf "Overwrite with latest version from GitHub? (y/N): " > /dev/tty
     read answer < /dev/tty
 
     case "$answer" in
         y|Y)
-            echo "⬇️ Overwriting hook..."
-            curl -fsSL "$REPO_URL" -o "$HOOK_FILE"
+            echo "⬇️  Overwriting hook..."
+            curl -fsSL "$REPO_HOOK_URL" -o "$HOOK_FILE"
             ;;
         *)
-            echo "⏭️ Keeping existing hook"
+            echo "⏭️  Keeping existing hook"
             ;;
     esac
 else
-    echo "⬇️ Installing hook (not found locally)..."
-    curl -fsSL "$REPO_URL" -o "$HOOK_FILE"
+    echo "⬇️  Downloading prepare-commit-msg hook..."
+    curl -fsSL "$REPO_HOOK_URL" -o "$HOOK_FILE"
+    echo "   ✔ Saved to $HOOK_FILE"
 fi
 
-# -------------------------
-# 5. Make hook executable
-# -------------------------
+# ==================================================
+# 8. Make hook executable
+# ==================================================
+
+echo ""
 echo "🔧 Making hook executable..."
 chmod +x "$HOOK_FILE"
+echo "   ✔ $HOOK_FILE"
 
-# -------------------------
-# 6. Enable git hooks path
-# -------------------------
-echo "⚙️ Configuring git hooks path..."
-git config core.hooksPath .githooks
+# ==================================================
+# 9. Set global git hooks path
+# ==================================================
 
-# -------------------------
-# DONE
-# -------------------------
 echo ""
-echo "✅ Installation complete!"
+echo "⚙️  Setting global git hooks path..."
+git config --global core.hooksPath "$HOOKS_DIR"
+echo "   ✔ core.hooksPath = $HOOKS_DIR"
+
+# ==================================================
+# Done
+# ==================================================
+
+echo ""
+echo "═══════════════════════════════════════════════"
+echo "  ✅  Gitoluxe installation complete!"
+echo "═══════════════════════════════════════════════"
 echo ""
 echo "📌 What was installed:"
 echo "   ✔ Ollama"
 echo "   ✔ Model ($MODEL)"
-echo "   ✔ Git AI Hook"
+echo "   ✔ Git hook (prepare-commit-msg)"
+echo "   ✔ Global hooks path set to $HOOKS_DIR"
+echo ""
+echo "📂 Install location: $GITOLUXE_DIR"
 echo ""
 echo "👉 Usage:"
-echo "   git add -A"
-echo "   git commit -m \"\""
-echo "" 
+echo "   Gitoluxe works automatically with every git commit."
+echo "   Simply stage your changes and commit with an empty message:"
+echo ""
+echo "     git add -A"
+echo "     git commit -m \"\""
+echo ""
+echo "   The AI hook will analyse your staged diff and generate"
+echo "   a meaningful commit message for you."
+echo ""
+echo "   To reconfigure Gitoluxe:"
+echo "     bash $CONFIG_SCRIPT"
+echo ""
 echo "🤖 AI will now assist your commits!"
