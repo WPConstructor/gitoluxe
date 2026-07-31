@@ -91,7 +91,7 @@ set_model()
         if model_installed "$model"; then
             display_model="✅${model}"
         else
-            display_model="$model"
+            display_model="❌$model"
         fi
 
         printf "%2s) %-35s - %s\n" \
