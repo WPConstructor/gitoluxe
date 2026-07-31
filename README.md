@@ -25,7 +25,7 @@ Instead of manually writing commit messages, simply type `ai` (or leave the comm
 
 ## Screenshot
 
-<img src="https://wpconstructor.com/assets/images/readme/screenshots/gitoluxe-screenshot.jpg">
+<img src="https://wpconstructor.com/assets/images/logos/github/wpconstructor-gitoluxe.png">
 <br><br>
 
 ## Why Gitoluxe?
