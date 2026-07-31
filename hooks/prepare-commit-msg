@@ -1248,7 +1248,7 @@ run_menu(){
             ;;
             d)
                 # [D] Debug: show generation timing and diff size info
-                new_msg="Generation took $gen_time_info of $diff_len characters"
+                new_msg="Generation took $gen_time_info of $diff_len characters - Model : $MODEL"
             ;;
             x)
                 # [X] Cancel: abort the commit entirely

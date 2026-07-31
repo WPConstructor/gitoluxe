@@ -4,7 +4,7 @@
 # Defaults
 # --------------------------------------------------
 
-CONFIG_FILE="gitoluxe.config.env"
+CONFIG_FILE="$HOME/gitoluxe/gitoluxe.config.env"
 DEFAULT_MODEL="qwen3:4b"
 DEFAULT_TEMPERATURE="0.1"
 DEFAULT_MAX_INPUT_CHARS="7000"
@@ -101,7 +101,7 @@ set_model()
 
         i=$((i + 1))
 
-    done <<EOF
+        done <<EOF
 $QWEN_MODELS
 EOF
 
