@@ -1,5 +1,5 @@
-# Gitoluxe
-
+<h1 align="center">Gitoluxe</h1>
+<p align="center"><img src="https://wpconstrcutor.com/assets/images/logos/github/wpconstructor-gitoluxe.png" width="400"></p>
 **AI-powered Conventional Commit message generation for Git.**
 
 Gitoluxe is a lightweight Bash-based Git hook that automatically generates high-quality **Conventional Commit** messages using a local Large Language Model (LLM) running through **Ollama**.
@@ -23,7 +23,12 @@ Instead of manually writing commit messages, simply type `ai` (or leave the comm
 * 📄 GPL-3.0 licensed
 <br><br>
 
-# Why Gitoluxe?
+## Screenshot
+
+<img src="https://wpconstructor.com/assets/images/readme/screenshots/gitoluxe-screenshot.jpg">
+<br><br>
+
+## Why Gitoluxe?
 
 Writing good commit messages is repetitive.
 
@@ -292,21 +297,9 @@ The debug menu displays information such as:
 
 * generation time
 * diff size
-* prompt size
+* used model
 
 Useful for benchmarking different models.
-<br><br>
-
-# Exit Conditions
-
-The hook exits immediately when:
-
-* running inside CI
-* merge commits
-* squash commits
-* template commits
-* user already supplied a commit message
-* nothing is staged
 <br><br>
 
 # License
