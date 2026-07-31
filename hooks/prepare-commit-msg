@@ -1036,7 +1036,7 @@ generate_ai_message() {
 
     available_without_ollama=$((available + ollama_used))
 
-    print_center "Generating commit message... (${available_without_ollama} MiB free - Model: ${MODEL})" "$RED"
+    print_center "Generating commit message... (${available_without_ollama} MiB free - Model: ${MODEL} - Input Chars ${diff_len})" "$RED"
     # Call Ollama and extract the response JSON string from the wrapper
     json_msg=$(generate_subject | jq -r '.response')
     # Parse each field from the AI-generated JSON into global variables
