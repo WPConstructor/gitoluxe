@@ -1188,27 +1188,6 @@ add_message_suggestions() {
 # Menu functions
 # ----------------------------
 
-# Validates that a user's numeric choice falls within the expected range [1, max].
-# Used to verify selection of AI suggestion numbers.
-#
-# Arguments:
-#   $1 - The user's input string
-#   $2 - Maximum valid number
-#
-# Returns:
-#   0 if valid (is a number and within range)
-#   1 if invalid
-check_choice() {
-    local choice="$1"
-    local max="$2"
-    # Regex check for digits only, then range check
-    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$max" ]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
 # Displays the edited commit message and asks the user to confirm, reject, or
 # go back to the editor. Uses a polling loop until a valid answer is given.
 #
