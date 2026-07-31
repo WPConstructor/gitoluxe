@@ -25,9 +25,6 @@
 # Main Configuration
 # ============================
 
-# Minimum required memory in GB for running AI generation
-REQUIRED_GB=6
-
 # Maximum number of characters allowed in a commit message prompt/input
 MAX_INPUT_CHARS=7000
 
@@ -1021,8 +1018,25 @@ generate_ai_message() {
 
     print_title
     echo ""
+    
+    # Available memory from Linux (MiB)
+    available=$(free -m | awk '/^Mem:/ {print $7}')
 
-    print_center "Generating commit message..." "$RED"
+    # Ollama memory (MiB)
+    ollama_used=$(ollama ps 2>/dev/null | awk '
+    NR>1 {
+        gsub(/[()]/, "", $5)
+        if ($5 ~ /GiB/) sum += $5 * 1024
+        else if ($5 ~ /MiB/) sum += $5
+    }
+    END {print int(sum)}
+    ')
+
+    ollama_used=${ollama_used:-0}
+
+    available_without_ollama=$((available + ollama_used))
+
+    print_center "Generating commit message... (${available_without_ollama} MiB free - Model: ${MODEL})" "$RED"
     # Call Ollama and extract the response JSON string from the wrapper
     json_msg=$(generate_subject | jq -r '.response')
     # Parse each field from the AI-generated JSON into global variables
