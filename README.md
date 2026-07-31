@@ -51,15 +51,14 @@ Improved configuration handling.
 
 * Bash
 * Git
-* Ollama
-* jq
+* Ollama (gets installed)
+* jq (gets installed)
 * curl
 
 Recommended:
 
 * 6 GB RAM minimum
-* Linux
-* Any Ollama-compatible model
+* Linux Ubuntu
 <br><br>
 
 ## Installation
