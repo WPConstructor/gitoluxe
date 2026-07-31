@@ -9,24 +9,6 @@ DEFAULT_MODEL="qwen3:4b"
 DEFAULT_TEMPERATURE="0.1"
 DEFAULT_MAX_INPUT_CHARS="7000"
 
-
-# --------------------------------------------------
-# Qwen models
-# Format:
-# model|description
-# --------------------------------------------------
-
-QWEN_MODELS="
-qwen3:4b|Recommended default. Excellent speed and quality balance for most users.
-qwen3:1.7b|Lightweight. Good for simple commits and small code changes.
-qwen3:0.6b|Ultra lightweight. Very fast, suitable for tiny diffs and low-end hardware.
-deepseek-coder:6.7b|Code-focused. Excellent at understanding diffs and generating commit messages.
-qwen3:8b|High quality. Better reasoning for complex commits, refactors, and larger changes.
-llama3.1:8b|Strong general model. Produces clear, natural commit messages.
-deepseek-coder-v2:16b|Best overall for coding. Outstanding for large diffs, refactors, and complex repositories.
-"
-
-
 # --------------------------------------------------
 # Read config
 #
@@ -75,6 +57,20 @@ config_set()
     fi
 }
 
+# --------------------------------------------------
+# Qwen models
+# Format:
+# model|description
+# --------------------------------------------------
+
+QWEN_MODELS="qwen3:4b|Recommended default. Excellent speed and quality balance for most users.
+qwen3:1.7b|Lightweight. Good for simple commits and small code changes.
+qwen3:0.6b|Ultra lightweight. Very fast, suitable for tiny diffs and low-end hardware.
+deepseek-coder:6.7b|Code-focused. Excellent at understanding diffs and generating commit messages.
+qwen3:8b|High quality. Better reasoning for complex commits, refactors, and larger changes.
+llama3.1:8b|Strong general model. Produces clear, natural commit messages.
+deepseek-coder-v2:16b|Best overall for coding. Outstanding for large diffs, refactors, and complex repositories.
+"
 
 # --------------------------------------------------
 # Select Qwen model
@@ -92,9 +88,15 @@ set_model()
     do
         [ -z "$model" ] && continue
 
-        printf "%2s) %-25s - %s\n" \
+        if model_installed "$model"; then
+            display_model="✅${model}"
+        else
+            display_model="$model"
+        fi
+
+        printf "%2s) %-35s - %s\n" \
             "$i" \
-            "$model" \
+            "$display_model" \
             "$description"
 
         i=$((i + 1))
