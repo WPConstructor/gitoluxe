@@ -1,5 +1,5 @@
 <h1 align="center">Gitoluxe</h1>
-<p align="center"><img src="https://wpconstrcutor.com/assets/images/logos/github/wpconstructor-gitoluxe.png" width="400"></p>
+<p align="center"><img src="https://wpconstructor.com/assets/images/logos/github/wpconstructor-gitoluxe.png" width="400"></p>
 **AI-powered Conventional Commit message generation for Git.**
 
 Gitoluxe is a lightweight Bash-based Git hook that automatically generates high-quality **Conventional Commit** messages using a local Large Language Model (LLM) running through **Ollama**.
@@ -25,7 +25,7 @@ Instead of manually writing commit messages, simply type `ai` (or leave the comm
 
 ## Screenshot
 
-<img src="https://wpconstructor.com/assets/images/logos/github/wpconstructor-gitoluxe.png">
+<img src="https://wpconstructor.com/assets/images/readme/screenshots/gitoluxe-screenshot.jpg">
 <br><br>
 
 ## Why Gitoluxe?
