@@ -126,6 +126,66 @@ EOF
     echo "MODEL=$selected"
 }
 
+# --------------------------------------------------
+# Check whether a model is installed locally
+# --------------------------------------------------
+
+model_installed()
+{
+    local model="$1"
+
+    ollama list 2>/dev/null | awk '{print $1}' | grep -Fxq "$model"
+}
+
+
+# --------------------------------------------------
+# Download model if missing
+# --------------------------------------------------
+
+ensure_model_installed()
+{
+    model="$1"
+
+    if model_installed "$model"; then
+        echo
+        echo "✓ Ollama model '$model' is already installed."
+        return 0
+    fi
+
+    echo
+    echo "The selected Ollama model is not installed:"
+    echo
+    echo "    $model"
+    echo
+
+    printf "Download it now? [Y/n]: "
+    read answer
+
+    case "$answer" in
+        ""|Y|y|yes|YES)
+            echo
+            echo "Downloading $model..."
+            echo
+
+            if ! ollama pull "$model"; then
+                echo
+                echo "Failed to download '$model'."
+                return 1
+            fi
+
+            echo
+            echo "✓ Model installed."
+            ;;
+        *)
+            echo
+            echo "Skipping model download."
+            ;;
+    esac
+}
+
+if ! model_installed "$selected"; then
+    ensure_model_installed "$selected"
+fi
 
 # --------------------------------------------------
 # Set temperature
