@@ -13,13 +13,10 @@ Instead of manually writing commit messages, simply type `ai` (or leave the comm
 * 🤖 AI-generated Conventional Commit messages
 * 🧠 Uses local LLMs via Ollama
 * 🔒 Runs completely offline
-* ⚡ Fast Bash implementation
 * 🎯 Automatic commit type detection
 * 📦 Automatic scope selection
 * 📝 Multi-line commit body generation
 * 🔍 Analyzes staged files, statistics and diff
-* 🚫 Ignores formatting-only and comment-only changes
-* 🛡 Prompt injection protection for source code comments
 * 🎨 Interactive terminal interface
 * ✏ Edit before committing
 * 🔄 Supports `git commit --amend`
@@ -58,48 +55,33 @@ Improved configuration handling.
 Recommended:
 
 * 6 GB RAM minimum
-* Linux or macOS
+* Linux
 * Any Ollama-compatible model
 
 ---
 
 # Installation
 
-Clone the repository.
+Install Gitoluxe globally with a single command:
 
 ```bash
-git clone https://github.com/WPConstructor/gitoluxe.git
-cd gitoluxe
+curl -fsSL https://raw.githubusercontent.com/WPConstructor/main/repoluxe.install.sh | bash
 ```
 
-Install the Git hook.
+Or, if you prefer to download the installer first:
 
 ```bash
-cp prepare-commit-msg .git/hooks/
-chmod +x .git/hooks/prepare-commit-msg
+curl -fsSL -o repoluxe.install.sh https://raw.githubusercontent.com/WPConstructor/main/repoluxe.install.sh
+bash repoluxe.install.sh
 ```
 
----
+The installer will:
 
-# Install Ollama
-
-Install Ollama from:
-
-https://ollama.com
-
-Start the server:
-
-```bash
-ollama serve
-```
-
-Download a model.
-
-Example:
-
-```bash
-ollama pull qwen3:4b
-```
+- Install Gitoluxe into your home directory
+- Configure global Git hooks
+- Install the `prepare-commit-msg` hook
+- Create default configuration if needed
+- Verify required dependencies
 
 ---
 
