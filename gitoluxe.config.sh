@@ -183,10 +183,6 @@ ensure_model_installed()
     esac
 }
 
-if ! model_installed "$selected"; then
-    ensure_model_installed "$selected"
-fi
-
 # --------------------------------------------------
 # Set temperature
 #
@@ -284,6 +280,10 @@ show_config()
 }
 
 set_model
+
+if ! model_installed "$selected"; then
+    ensure_model_installed "$selected"
+fi
 
 printf "Temperature (default 0): "
 read TEMP
