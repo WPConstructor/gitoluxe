@@ -55,6 +55,28 @@ config_get()
     fi
 }
 
+ensure_jq()
+{
+    if command -v jq >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "jq is not installed."
+    echo "Installing jq..."
+
+    if ! sudo apt update || ! sudo apt install -y jq; then
+        echo "Failed to install jq."
+        return 1
+    fi
+
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "jq installation verification failed."
+        return 1
+    fi
+
+    echo "✓ jq installed successfully."
+}
+
 # --------------------------------------------------
 # Resolve latest tag from GitHub
 # --------------------------------------------------
@@ -110,6 +132,8 @@ if ! command -v ollama &>/dev/null; then
 else
     echo "✅ Ollama already installed"
 fi
+
+ensure_jq
 
 # ==================================================
 # 4. Run configuration wizard (if env not present)
