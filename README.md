@@ -47,7 +47,7 @@ Improved configuration handling.
 ```
 <br><br>
 
-# Requirements
+## Requirements
 
 * Bash
 * Git
@@ -62,7 +62,7 @@ Recommended:
 * Any Ollama-compatible model
 <br><br>
 
-# Installation
+## Installation
 
 Install Gitoluxe globally with a single command:
 
@@ -86,7 +86,7 @@ The installer will:
 - Verify required dependencies
 <br><br>
 
-# Configuration
+## Configuration
 
 Create a configuration file.
 
@@ -102,7 +102,7 @@ TEMPERATURE=0
 MAX_INPUT_CHARS=7000
 ```
 
-## Options
+### Options
 
 | Variable        | Description                  | Default  |
 | --------------- | ---------------------------- | -------- |
@@ -111,7 +111,7 @@ MAX_INPUT_CHARS=7000
 | MAX_INPUT_CHARS | Maximum diff size sent to AI | 7000     |
 <br><br>
 
-# Usage
+## Usage
 
 Stage your files.
 
@@ -134,7 +134,7 @@ ai
 The hook launches automatically.
 <br><br>
 
-# Interactive Menu
+## Interactive Menu
 
 After generation, Gitoluxe displays the generated commit.
 
@@ -164,7 +164,7 @@ Available actions:
 | **X** | Cancel commit       |
 <br><br>
 
-# AI Analysis
+## AI Analysis
 
 The AI receives three sources of information.
 
@@ -185,7 +185,7 @@ The prompt instructs the model to:
 * return strict JSON
 <br><br>
 
-# Prompt Injection Protection
+## Prompt Injection Protection
 
 Source code comments can contain arbitrary text.
 
@@ -200,7 +200,7 @@ To prevent prompt injection, Gitoluxe sanitizes diff lines beginning with:
 These are treated as source code comments instead of prompt instructions.
 <br><br>
 
-# Conventional Commit Support
+## Conventional Commit Support
 
 Supported types include:
 
@@ -240,7 +240,7 @@ validation
 ```
 <br><br>
 
-# Generated Commit Example
+## Generated Commit Example
 
 Input:
 
@@ -260,7 +260,7 @@ Improved configuration loading.
 ```
 <br><br>
 
-# Supported Models
+## Supported Models
 
 Any Ollama model may be used.
 
@@ -280,19 +280,19 @@ bash ~/gitoluxe/gitoluxe.config.sh
 ```
 <br><br>
 
-# Automatic Ollama Startup
+## Automatic Ollama Startup
 
 If Ollama is not already running, Gitoluxe automatically starts it before generating the commit message.
 <br><br>
 
-# Amended Commits
+## Amended Commits
 
 `git commit --amend` is fully supported.
 
 When no staged changes exist, Gitoluxe automatically analyzes the previous commit.
 <br><br>
 
-# Debug Information
+## Debug Information
 
 The debug menu displays information such as:
 
@@ -303,14 +303,14 @@ The debug menu displays information such as:
 Useful for benchmarking different models.
 <br><br>
 
-# License
+## License
 
 Licensed under the GNU General Public License v3.0 or later.
 
 See the `LICENSE` file for details.
 <br><br>
 
-# Author
+## Author
 
 **WPConstructor**
 
