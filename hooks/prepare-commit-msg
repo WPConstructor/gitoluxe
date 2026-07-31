@@ -261,18 +261,6 @@ print_tty_indent_1() {
         > /dev/tty
 }
 
-# Prints a message to the TTY with word wrapping.
-# Continuation lines (2nd line onward) receive a 5-space indent,
-# useful for list-style formatting where items need deeper indentation.
-print_tty_indent_5() {
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    printf "%s\n" "$@" \
-        | fold -s -w "$width" \
-        | sed '2,$s/^/     /' \
-        > /dev/tty
-}
-
 # Displays a colored horizontal line separator spanning the terminal width.
 # The separator is a series of dashes with 1 space padding on each side,
 # rendered in the brand violet color for visual consistency.
@@ -869,113 +857,6 @@ Before returning JSON verify:
 
 Return ONLY the JSON object."
 
-# ----------------------------
-# 🧠 AI generator functions
-# ----------------------------
-
-# Looks up and prints the human-readable description for a given Conventional
-# Commit type. This is used in the interactive menu when the user wants to
-# understand what each commit type means before selecting one.
-#
-# Arguments:
-#   $1 - The commit type to look up (e.g., "feat", "fix", "refactor")
-#
-# Returns:
-#   0 if the type was found (description printed to stdout)
-#   1 if the type was not recognized
-get_type_desc() {
-    choice="$1"
-
-    # Parallel arrays: types[i] maps to descs[i]
-    # All 21 Conventional Commit types supported by Gitoluxe
-    types=("feat" "fix" "refactor" "style" "docs" "test" "perf" "chore" "release" "remove" "build" "ci" "security" "i18n" "deps" "hotfix" "ui" "merge" "revert" "move" "cleanup")
-
-    descs=(
-        "Introduces a new user-facing feature or capability. This includes adding new functionality that changes or extends behavior. Only use when actual new behavior is delivered to the user."
-        "Fixes a bug or incorrect behavior in the system. Resolves an issue where the software does not work as intended. Does not introduce new features."
-        "Restructures code without changing external behavior. Used for improving internal design, readability, or maintainability. No functional changes should result."
-        "Changes related to code style, formatting, or whitespace only. Does not affect logic or behavior. Typically used for linting or formatting adjustments."
-        "Updates documentation files only, such as README or inline docs. No production or test code is modified. Used to clarify or improve project documentation."
-        "Adds new tests or updates existing tests. Ensures correctness of functionality without changing production behavior. May include test fixes or coverage improvements."
-        "Improves performance without changing observable behavior. Focuses on optimizing speed, memory usage, or efficiency. No functional changes are introduced."
-        "General maintenance tasks, tooling updates, or minor internal changes. Includes non-feature work that supports development workflows. Does not affect user-facing behavior."
-        "Prepares or performs a new software release. Includes versioning, tagging, or release-related adjustments. No functional changes should be introduced in this commit."
-        "Removes dead code, unused files, or obsolete functionality. Ensures cleanup of no-longer-needed components. Must not break existing behavior."
-        "Changes related to build system, packaging, or external build dependencies. Includes configuration for bundlers or build tools. Does not change runtime logic directly."
-        "Updates continuous integration or deployment configurations. Affects CI pipelines, workflows, or automation scripts. No application logic changes are intended."
-        "Fixes or mitigates a security vulnerability. Addresses issues that could lead to unauthorized access or exploitation. Should be treated as high priority changes."
-        "Adds or updates internationalization or localization support. Includes translations or locale-specific formatting changes. Does not change core functionality."
-        "Updates external dependencies or libraries. Includes version bumps, removals, or replacements. May include compatibility adjustments."
-        "Fixes a critical or urgent issue affecting production systems. Used when immediate correction is required. Often a fast-tracked version of a bug fix."
-        "Changes related to user interface or visual presentation. Includes styling, layout, or UX adjustments. Does not modify core business logic."
-        "Combines branches or integrates separate lines of development. Used for merge commits only. Does not introduce new feature logic."
-        "Reverts a previous commit or set of changes. Restores prior state of the codebase. Used when a change needs to be undone."
-        "Moves or renames files or directories without changing content. Helps reorganize project structure. No functional changes are introduced."
-        "General cleanup of codebase and minor improvements. Includes small refactors, simplifications, or removals. Does not affect behavior."
-    )
-
-    # Linear search through the types array to find a match
-    i=0
-    while [ $i -lt ${#types[@]} ]; do
-        if [ "${types[$i]}" = "$choice" ]; then
-            printf "%s\n" "${descs[$i]}"
-            return 0
-        fi
-        i=$((i + 1))
-    done
-
-    # Type not found in our list
-    return 1
-}
-
-# Displays a legacy interactive menu with available actions.
-# NOTE: This appears to be an older version of the menu renderer, superseded
-# by the run_menu() function which uses the print_menu() helper with the
-# `menu_items` array. Retained for potential fallback or reference.
-#
-# Uses a fixed-width column layout (24 chars each) and auto-calculates
-# the number of columns based on terminal width.
-do_menu() {
-    local width cols i items count col_width
-
-    width=$(tput cols < /dev/tty 2>/dev/null || echo 80)
-
-    # Define all available menu actions with their shortcut keys
-    items=(
-        " [1-$total_ai_msg] Accept"
-        " [A] Add Suggestions"
-        " [T] Prefix Type"
-        " Enter Type for Type description"
-        " [S] Prefix Scope"
-        " [B] Add Body"
-        " [R] Remove Body"
-        " [C] Changes"
-        " [E1-E$total_ai_msg] Edit Suggestion"
-        " [M] Edit Manually"
-        " [X] Exit"
-    )
-
-    count=${#items[@]}
-
-    # Each column is 24 characters wide; calculate how many fit
-    col_width=24
-    cols=$(( width / col_width ))
-    [ "$cols" -lt 1 ] && cols=1
-
-    # Blank line before the menu for spacing
-    echo "" > /dev/tty
-
-    # Print each item, wrapping to the next line after filling all columns
-    for ((i=0; i<count; i++)); do
-        printf "%-${col_width}s" "${items[i]}"
-
-        # Insert a newline after every `cols` items to start a new row
-        if (( (i + 1) % cols == 0 )); then
-            printf "\n"
-        fi
-    done
-}
-
 # ============================
 # Global State Variables
 # ============================
@@ -993,7 +874,6 @@ gen_time_info=""
 # -- Scope Tracking --
 # These track unique scopes encountered across AI suggestions,
 # allowing the user to select from previously-seen scopes.
-selected_scope=""       # The scope currently chosen by the user (empty = use AI's default)
 unique_scopes=()        # Ordered list of unique scope strings seen so far
 declare -A scope_map    # Associative array for O(1) scope deduplication
 
