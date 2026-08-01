@@ -20,7 +20,7 @@ Instead of manually writing commit messages, simply type `ai` (or leave the comm
 * 🎨 Interactive terminal interface
 * ✏ Edit before committing
 * 🔄 Supports `git commit --amend`
-* ⚙ Configurable through `gitoluxe.config.env`
+* ⚙ Configurable through `gitoluxe.config.sh`
 * 📄 GPL-3.0 licensed
 <br><br>
 
