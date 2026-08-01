@@ -129,9 +129,8 @@ EOF
 
     echo
     printf "Select model number: "
-    read choice
-
-
+    read choice </dev/tty
+    
     selected=$(echo "$QWEN_MODELS" | \
         sed -n "${choice}p" | \
         cut -d "|" -f1)
