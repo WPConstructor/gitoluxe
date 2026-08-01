@@ -77,24 +77,6 @@ ensure_jq()
     echo "✓ jq installed successfully."
 }
 
-# --------------------------------------------------
-# Resolve latest tag from GitHub
-# --------------------------------------------------
-
-echo "🔍 Fetching latest Gitoluxe release tag..."
-
-LATEST_TAG=$(curl -s https://api.github.com/repos/WPConstructor/gitoluxe/tags \
-  | grep '"name"' \
-  | head -n 1 \
-  | cut -d '"' -f4)
-
-if [ -z "$LATEST_TAG" ]; then
-    echo "❌ Could not determine the latest tag from GitHub."
-    exit 1
-fi
-
-echo "   Latest tag: $LATEST_TAG"
-
 # ==================================================
 # 1. Create $HOME/gitoluxe directory
 # ==================================================
@@ -108,7 +90,7 @@ echo "   ✔ $GITOLUXE_DIR"
 # 2. Download gitoluxe.config.sh (if not present)
 # ==================================================
 
-REPO_CONFIG_URL="https://raw.githubusercontent.com/WPConstructor/gitoluxe/$LATEST_TAG/gitoluxe.config.sh"
+REPO_CONFIG_URL="https://raw.githubusercontent.com/WPConstructor/gitoluxe/main/gitoluxe.config.sh"
 
 if [ ! -f "$CONFIG_SCRIPT" ]; then
     echo ""
@@ -175,7 +157,7 @@ echo "   ✔ $HOOKS_DIR"
 # 7. Download prepare-commit-msg hook
 # ==================================================
 
-REPO_HOOK_URL="https://raw.githubusercontent.com/WPConstructor/gitoluxe/$LATEST_TAG/hooks/prepare-commit-msg"
+REPO_HOOK_URL="https://raw.githubusercontent.com/WPConstructor/gitoluxe/main/hooks/prepare-commit-msg"
 
 echo ""
 if [ -f "$HOOK_FILE" ]; then

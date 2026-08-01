@@ -66,14 +66,14 @@ Recommended:
 Install Gitoluxe globally with a single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/WPConstructor/main/repoluxe.install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/WPConstructor/gitoluxe/main/gitoluxe-install.sh | bash
 ```
 
 Or, if you prefer to download the installer first:
 
 ```bash
-curl -fsSL -o repoluxe.install.sh https://raw.githubusercontent.com/WPConstructor/main/repoluxe.install.sh
-bash repoluxe.install.sh
+curl -fsSL -o repoluxe.install.sh https://raw.githubusercontent.com/WPConstructor/gitoluxe/main/gitoluxe-install.sh
+bash gitoluxe-install.sh
 ```
 
 The installer will:
