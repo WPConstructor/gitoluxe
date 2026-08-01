@@ -87,19 +87,13 @@ The installer will:
 
 ## Configuration
 
-Create a configuration file.
+Run the configuration script:
 
 ```text
-gitoluxe.config.env
+bash ~/gitoluxe/gitoluxe.config.sh
 ```
 
-Example:
-
-```ini
-MODEL=qwen3:4b
-TEMPERATURE=0
-MAX_INPUT_CHARS=7000
-```
+<br><br>
 
 ### Options
 
