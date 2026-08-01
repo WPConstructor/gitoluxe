@@ -130,7 +130,7 @@ EOF
     echo
     printf "Select model number: "
     read choice </dev/tty
-    
+
     selected=$(echo "$QWEN_MODELS" | \
         sed -n "${choice}p" | \
         cut -d "|" -f1)
@@ -181,8 +181,8 @@ ensure_model_installed()
     echo
 
     printf "Download it now? [Y/n]: "
-    read answer
-
+    read answer </dev/tty
+    
     case "$answer" in
         ""|Y|y|yes|YES)
             echo
@@ -308,12 +308,12 @@ if ! model_installed "$selected"; then
 fi
 
 printf "Temperature (default 0): "
-read TEMP
+read TEMP </dev/tty
 TEMP=${TEMP:-0}
 set_temperature "$TEMP"
 
 printf "Max input chars (default 7000): "
-read CHARS
+read CHARS </dev/tty
 CHARS=${CHARS:-7000}
 set_max_input_chars "$CHARS"
 
