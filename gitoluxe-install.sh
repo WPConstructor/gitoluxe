@@ -64,8 +64,21 @@ ensure_jq()
     echo "jq is not installed."
     echo "Installing jq..."
 
-    if ! sudo apt update || ! sudo apt install -y jq; then
-        echo "Failed to install jq."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if command -v brew >/dev/null 2>&1; then
+            brew install jq
+        else
+            echo "Error: jq is not installed and Homebrew not found."
+            echo "Please install jq manually using 'brew install jq'."
+            return 1
+        fi
+    elif command -v apt >/dev/null 2>&1; then
+        if ! sudo apt update || ! sudo apt install -y jq; then
+            echo "Failed to install jq."
+            return 1
+        fi
+    else
+        echo "Could not detect package manager to install jq. Please install it manually."
         return 1
     fi
 
@@ -109,8 +122,15 @@ fi
 
 echo ""
 if ! command -v ollama &>/dev/null; then
-    echo "📦 Installing Ollama..."
-    curl -fsSL https://ollama.com/install.sh | sh
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "📦 Ollama not found. Please download and install it from:"
+        echo "   https://ollama.com/download/mac"
+        echo "   Once installed, run this script again."
+        exit 1
+    else
+        echo "📦 Installing Ollama..."
+        curl -fsSL https://ollama.com/install.sh | sh
+    fi
 else
     echo "✅ Ollama already installed"
 fi
