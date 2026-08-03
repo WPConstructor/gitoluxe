@@ -102,6 +102,7 @@ bash ~/gitoluxe/gitoluxe.config.sh
 | MODEL           | Ollama model                 | qwen3:4b |
 | TEMPERATURE     | AI creativity                | 0        |
 | MAX_INPUT_CHARS | Maximum diff size sent to AI | 7000     |
+
 <br><br>
 
 ## Usage
