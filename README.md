@@ -72,7 +72,7 @@ curl -fsSL https://raw.githubusercontent.com/WPConstructor/gitoluxe/main/gitolux
 Or, if you prefer to download the installer first:
 
 ```bash
-curl -fsSL -o repoluxe.install.sh https://raw.githubusercontent.com/WPConstructor/gitoluxe/main/gitoluxe-install.sh
+curl -fsSL -o gitoluxe-install.sh https://raw.githubusercontent.com/WPConstructor/gitoluxe/main/gitoluxe-install.sh
 bash gitoluxe-install.sh
 ```
 
