@@ -257,18 +257,15 @@ Improved configuration loading.
 
 ## Supported Models
 
-Any Ollama model may be used.
-
-Examples:
-
 * qwen3:4b
+* qwen3:1.7b
+* qwen3:0.6b
+* deepseek-coder:6.7b
 * qwen3:8b
-* llama3
-* mistral
-* gemma
-* deepseek
+* llama3.1:8b
+* deepseek-coder-v2:16b
 
-Running:
+Set model running:
 
 ```
 bash ~/gitoluxe/gitoluxe.config.sh
