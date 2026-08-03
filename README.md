@@ -156,6 +156,7 @@ Available actions:
 | **S** | Show staged changes |
 | **D** | Debug information   |
 | **X** | Cancel commit       |
+
 <br><br>
 
 ## AI Analysis
