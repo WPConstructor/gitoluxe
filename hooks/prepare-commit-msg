@@ -497,6 +497,8 @@ SUMMARIZED DIFF:
     s|^([+-])[[:space:]]*/\*|\1 COMMENT:|;
 ')
 
+diff_payload=$(git diff --cached --unified=1 --no-color | head -c "$MAX_INPUT_CHARS")
+
 SUBJECT_PROMPT="Generate a precise Conventional Commit message from the provided git diff.
 
 Return EXACTLY one valid JSON object and nothing else.
