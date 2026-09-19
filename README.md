@@ -295,6 +295,18 @@ The debug menu displays information such as:
 Useful for benchmarking different models.
 <br><br>
 
+## Changelog
+
+1.0.1 — 19 September 2026
+
+* Fixed an issue where added comments were not being truncated to the configured maximum length.
+
+1.0.0 — 4 August 2026
+
+* Initial release.
+
+<br><br>
+
 ## License
 
 Licensed under the GNU General Public License v3.0 or later.
